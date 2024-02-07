@@ -52,6 +52,7 @@ Ext.define('PVE.dc.Summary', {
 	    xtype: 'pveDcNodeView',
 	    height: 250,
 	},
+	/*
 	{
 	    title: gettext('Subscriptions'),
 	    height: 220,
@@ -71,6 +72,7 @@ Ext.define('PVE.dc.Summary', {
 		},
 	    ],
 	},
+	//*/
     ],
 
     listeners: {
@@ -209,6 +211,7 @@ Ext.define('PVE.dc.Summary', {
 	let dcHealth = me.getComponent('dcHealth');
 	me.mon(rstore, 'load', dcHealth.updateStatus, dcHealth);
 
+	/*
 	let subs = me.down('#subscriptions');
 	me.mon(rstore, 'load', function(store, records, success) {
 	    var level;
@@ -262,7 +265,7 @@ Ext.define('PVE.dc.Summary', {
 
 	    subs.setData(data);
 	});
-
+	//*/
 	me.on('destroy', function() {
 	    rstore.stopUpdate();
 	});
