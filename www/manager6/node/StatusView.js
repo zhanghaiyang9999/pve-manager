@@ -148,6 +148,7 @@ Ext.define('PVE.node.StatusView', {
     initComponent: function() {
 	let me = this;
 
+	/*
 	let stateProvider = Ext.state.Manager.getProvider();
 	let repoLink = stateProvider.encodeHToken({
 	    view: "server",
@@ -162,6 +163,7 @@ Ext.define('PVE.node.StatusView', {
 	    product: 'Proxmox VE',
 	    repoLink: `#${repoLink}`,
 	});
+	//*/
 
 	me.callParent();
     },

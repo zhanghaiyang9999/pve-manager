@@ -252,6 +252,7 @@ Ext.define('PVE.node.Config', {
 		url: "/api2/extjs/nodes/" + nodename + "/journal",
 	    });
 
+		/*
 	    if (caps.nodes['Sys.Modify']) {
 		me.items.push({
 		    xtype: 'proxmoxNodeAPT',
@@ -269,8 +270,7 @@ Ext.define('PVE.node.Config', {
 			nodename: nodename,
 		    },
 		    nodename: nodename,
-		});
-
+		});		
 		me.items.push({
 		    xtype: 'proxmoxNodeAPTRepositories',
 		    title: gettext('Repositories'),
@@ -279,8 +279,9 @@ Ext.define('PVE.node.Config', {
 		    nodename: nodename,
 		    onlineHelp: 'sysadmin_package_repositories',
 		    groups: ['apt'],
-		});
+		});		
 	    }
+		*/
 	}
 
 	if (caps.nodes['Sys.Audit']) {
