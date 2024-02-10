@@ -443,13 +443,14 @@ Ext.define('PVE.node.Config', {
 		    },
 		],
 	    },
+		/*
 	    {
 		title: gettext('Subscription'),
 		iconCls: 'fa fa-support',
 		itemId: 'support',
 		xtype: 'pveNodeSubscription',
 		nodename: nodename,
-	    },
+	    },*/
 	);
 
 	me.callParent();

@@ -339,6 +339,7 @@ Ext.define('PVE.dc.Config', {
 	    );
 	}
 
+	/*
 	if (caps.dc['Sys.Audit']) {
 	    me.items.push({
 		xtype: 'pveDcSupport',
@@ -347,6 +348,7 @@ Ext.define('PVE.dc.Config', {
 		iconCls: 'fa fa-comments-o',
 	    });
 	}
+	//*/
 
 	me.callParent();
    },
