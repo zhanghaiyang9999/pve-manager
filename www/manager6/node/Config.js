@@ -270,7 +270,8 @@ Ext.define('PVE.node.Config', {
 			nodename: nodename,
 		    },
 		    nodename: nodename,
-		});		
+		});
+
 		me.items.push({
 		    xtype: 'proxmoxNodeAPTRepositories',
 		    title: gettext('Repositories'),
@@ -279,7 +280,7 @@ Ext.define('PVE.node.Config', {
 		    nodename: nodename,
 		    onlineHelp: 'sysadmin_package_repositories',
 		    groups: ['apt'],
-		});		
+		});
 	    }
 		*/
 	}

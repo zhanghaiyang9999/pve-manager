@@ -3,9 +3,14 @@
 use strict;
 use PVE::INotify;
 use PVE::Cluster;
+use Socket;
+use Sys::Hostname;
 
 my $nodename = PVE::INotify::nodename();
 my $localip = PVE::Cluster::remote_node_ip($nodename, 1);
+my $host = hostname;#output the host name;
+my $name = gethostbyname($host);
+my $ip_addr = inet_ntoa($name);
 
 my $xline = '-' x 78;
 
@@ -14,12 +19,21 @@ my $banner = '';
 if ($localip) {
     $banner .= <<__EOBANNER;
 
+
 $xline
 
-Welcome to the Proxmox Virtual Environment. Please use your web browser to 
+Welcome to the Disaster Recovery environment. Please use your web browser to 
 configure this server - connect to:
 
-  https://${localip}:8006/
+  https://${ip_addr}:8006
+  Or
+  https://${host}:8006
+
+Control Center:
+  https://${ip_addr}:8443
+  Or
+  https://${host}:8443
+
 
 $xline
 
