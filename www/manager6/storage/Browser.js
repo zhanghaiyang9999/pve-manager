@@ -17,14 +17,27 @@ Ext.define('PVE.storage.Browser', {
 	    throw "no storage ID specified";
 	}
 
-	me.items = [
+	let storageInfo = PVE.data.ResourceStore.findRecord(
+	    'id',
+	    `storage/${nodename}/${storeid}`,
+	    0, // startIndex
+	    false, // anyMatch
+	    true, // caseSensitive
+	    true, // exactMatch
+	);
+	let res = storageInfo.data;
+	let plugin = res.plugintype;
+
+	let isEsxi = plugin === 'esxi';
+
+	me.items = !isEsxi ? [
 	    {
 		title: gettext('Summary'),
 		xtype: 'pveStorageSummary',
 		iconCls: 'fa fa-book',
 		itemId: 'summary',
 	    },
-	];
+	] : [];
 
 	let caps = Ext.state.Manager.get('GuiCap');
 
@@ -38,20 +51,13 @@ Ext.define('PVE.storage.Browser', {
 	    caps.storage['Datastore.AllocateSpace'] ||
 	    caps.storage['Datastore.Audit']
 	) {
-	    let storageInfo = PVE.data.ResourceStore.findRecord(
-		'id',
-		`storage/${nodename}/${storeid}`,
-		0, // startIndex
-		false, // anyMatch
-		true, // caseSensitive
-		true, // exactMatch
-	    );
-	    let res = storageInfo.data;
-	    let plugin = res.plugintype;
 	    let contents = res.content.split(',');
 
 	    let enableUpload = !!caps.storage['Datastore.AllocateTemplate'];
-	    let enableDownloadUrl = enableUpload && !!(caps.nodes['Sys.Audit'] && caps.nodes['Sys.Modify']);
+	    let enableDownloadUrl = enableUpload && (
+		!!(caps.nodes['Sys.Audit'] && caps.nodes['Sys.Modify']) || // for backward compat
+		!!caps.nodes['Sys.AccessNetwork'] // new explicit priv for querying (local) networks
+	    );
 
 	    if (contents.includes('backup')) {
 		me.items.push({
@@ -114,6 +120,58 @@ Ext.define('PVE.storage.Browser', {
 		    iconCls: 'fa fa-file-code-o',
 		    itemId: 'contentSnippets',
 		    content: 'snippets',
+		    pluginType: plugin,
+		});
+	    }
+	    if (contents.includes('import')) {
+		let isImportable = format => ['ova', 'ovf', 'vmx'].indexOf(format) !== -1;
+		let createGuestImportWindow = (selection) => {
+		    if (!selection) {
+			return;
+		    }
+
+		    let volumeName = selection.data.volid.replace(/^.*?:/, '');
+
+		    Ext.create('PVE.window.GuestImport', {
+			storage: storeid,
+			volumeName,
+			nodename,
+			autoShow: true,
+		    });
+		};
+		me.items.push({
+		    xtype: 'pveStorageContentView',
+		    // each gettext needs to be in a separate line
+		    title: isEsxi ? gettext('Virtual Guests')
+			: gettext('Import'),
+		    iconCls: isEsxi ? 'fa fa-desktop' : 'fa fa-cloud-download',
+		    itemId: 'contentImport',
+		    content: 'import',
+		    useCustomRemoveButton: isEsxi, // hide default remove button for esxi
+		    showColumns: isEsxi ? ['name', 'format'] : ['name', 'size', 'format'],
+		    enableUploadButton: enableUpload && !isEsxi,
+		    enableDownloadUrlButton: enableDownloadUrl && !isEsxi,
+		    useUploadButton: !isEsxi,
+		    itemdblclick: (view, record) => {
+			if (isImportable(record.data.format)) {
+			    createGuestImportWindow(record);
+			}
+		    },
+		    tbar: [
+			{
+			    xtype: 'proxmoxButton',
+			    disabled: true,
+			    text: gettext('Import'),
+			    iconCls: 'fa fa-cloud-download',
+			    enableFn: rec => isImportable(rec.data.format),
+			    handler: function() {
+				let grid = this.up('pveStorageContentView');
+				let selection = grid.getSelection()?.[0];
+
+				createGuestImportWindow(selection);
+			    },
+			},
+		    ],
 		    pluginType: plugin,
 		});
 	    }

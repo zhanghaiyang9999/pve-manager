@@ -9,6 +9,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	setVMConfig: function(vmconfig) {
 	    let me = this;
 	    let view = me.getView();
+	    let vm = me.getViewModel();
 	    me.vmconfig = vmconfig;
 
 	    let hostpci = me.vmconfig[view.confid] || '';
@@ -26,6 +27,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	    } else if (values.mapping) {
 		values.type = 'mapped';
 	    }
+	    vm.set('isMapped', values.type !== 'raw');
 
 	    values['x-vga'] = PVE.Parser.parseBoolean(values['x-vga'], 0);
 	    values.pcie = PVE.Parser.parseBoolean(values.pcie, 0);
@@ -67,21 +69,11 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 
 	    let path = value;
 	    if (pciDev.data.map) {
-		// find local mapping
-		for (const entry of pciDev.data.map) {
-		    let mapping = PVE.Parser.parsePropertyString(entry);
-		    if (mapping.node === pcisel.up('inputpanel').nodename) {
-			path = mapping.path.split(';')[0];
-			break;
-		    }
-		}
-		if (path.indexOf('.') === -1) {
-		    path += '.0';
-		}
+		path = pciDev.data.id;
 	    }
 
 	    if (pciDev.data.mdev) {
-		mdevfield.setPciID(path);
+		mdevfield.setPciIdOrMapping(path);
 	    }
 	    if (pcisel.reference === 'selector') {
 		let iommu = pciDev.data.iommugroup;
@@ -180,7 +172,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 		columnWidth: 1,
 		padding: '0 0 10 0',
 		itemId: 'iommuwarning',
-		value: 'The selected Device is not in a seperate IOMMU group, make sure this is intended.',
+		value: 'The selected Device is not in a separate IOMMU group, make sure this is intended.',
 		userCls: 'pmx-hint',
 	    },
 	];
@@ -190,6 +182,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 		xtype: 'radiofield',
 		name: 'type',
 		inputValue: 'mapped',
+		checked: true,
 		boxLabel: gettext('Mapped Device'),
 		bind: {
 		    value: '{isMapped}',
@@ -215,7 +208,6 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 		xtype: 'radiofield',
 		name: 'type',
 		inputValue: 'raw',
-		checked: true,
 		boxLabel: gettext('Raw Device'),
 	    },
 	    {
@@ -298,7 +290,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	    {
 		xtype: 'textfield',
 		name: 'vendor-id',
-		fieldLabel: Ext.String.format(gettext('{0} ID'), gettext('Vendor')),
+		fieldLabel: gettext('Vendor ID'),
 		emptyText: gettext('From Device'),
 		vtype: 'PciId',
 		allowBlank: true,
@@ -307,7 +299,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	    {
 		xtype: 'textfield',
 		name: 'device-id',
-		fieldLabel: Ext.String.format(gettext('{0} ID'), gettext('Device')),
+		fieldLabel: gettext('Device ID'),
 		emptyText: gettext('From Device'),
 		vtype: 'PciId',
 		allowBlank: true,
@@ -325,7 +317,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	    {
 		xtype: 'textfield',
 		name: 'sub-vendor-id',
-		fieldLabel: Ext.String.format(gettext('{0} ID'), gettext('Sub-Vendor')),
+		fieldLabel: gettext('Sub-Vendor ID'),
 		emptyText: gettext('From Device'),
 		vtype: 'PciId',
 		allowBlank: true,
@@ -334,7 +326,7 @@ Ext.define('PVE.qemu.PCIInputPanel', {
 	    {
 		xtype: 'textfield',
 		name: 'sub-device-id',
-		fieldLabel: Ext.String.format(gettext('{0} ID'), gettext('Sub-Device')),
+		fieldLabel: gettext('Sub-Device ID'),
 		emptyText: gettext('From Device'),
 		vtype: 'PciId',
 		allowBlank: true,

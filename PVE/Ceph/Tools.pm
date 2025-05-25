@@ -18,7 +18,9 @@ my $ccname = 'ceph'; # ceph cluster name
 my $ceph_cfgdir = "/etc/ceph";
 my $pve_ceph_cfgpath = "/etc/pve/$ccname.conf";
 my $ceph_cfgpath = "$ceph_cfgdir/$ccname.conf";
+my $pve_ceph_cfgdir = "/etc/pve/ceph";
 
+my $pve_ceph_crash_key_path = "$pve_ceph_cfgdir/$ccname.client.crash.keyring";
 my $pve_mon_key_path = "/etc/pve/priv/$ccname.mon.keyring";
 my $pve_ckeyring_path = "/etc/pve/priv/$ccname.client.admin.keyring";
 my $ckeyring_path = "/etc/ceph/ceph.client.admin.keyring";
@@ -35,39 +37,67 @@ my $ceph_service = {
     ceph_volume => '/usr/sbin/ceph-volume',
 };
 
-my $config_hash = {
+my $config_values = {
     ccname => $ccname,
+    pve_ceph_cfgdir => $pve_ceph_cfgdir,
+    ceph_mds_data_dir => $ceph_mds_data_dir,
+    long_rados_timeout => 60,
+};
+
+my $config_files = {
     pve_ceph_cfgpath => $pve_ceph_cfgpath,
+    pve_ceph_crash_key_path => $pve_ceph_crash_key_path,
     pve_mon_key_path => $pve_mon_key_path,
     pve_ckeyring_path => $pve_ckeyring_path,
     ceph_bootstrap_osd_keyring => $ceph_bootstrap_osd_keyring,
     ceph_bootstrap_mds_keyring => $ceph_bootstrap_mds_keyring,
-    ceph_mds_data_dir => $ceph_mds_data_dir,
-    long_rados_timeout => 60,
     ceph_cfgpath => $ceph_cfgpath,
 };
 
 sub get_local_version {
     my ($noerr) = @_;
 
-    if (check_ceph_installed('ceph_bin', $noerr)) {
-	my $ceph_version;
-	run_command(
-	    [ $ceph_service->{ceph_bin}, '--version' ],
-	    noerr => $noerr,
-	    outfunc => sub { $ceph_version = shift if !defined $ceph_version },
-	);
-	return undef if !defined $ceph_version;
+    return undef if !check_ceph_installed('ceph_bin', $noerr);
 
-	if ($ceph_version =~ /^ceph.*\sv?(\d+(?:\.\d+)+(?:-pve\d+)?)\s+(?:\(([a-zA-Z0-9]+)\))?/) {
-	    my ($version, $buildcommit) = ($1, $2);
-	    my $subversions = [ split(/\.|-/, $version) ];
+    my $ceph_version;
+    run_command(
+	[ $ceph_service->{ceph_bin}, '--version' ],
+	noerr => $noerr,
+	outfunc => sub { $ceph_version = shift if !defined $ceph_version },
+    );
 
-	    # return (version, buildid, major, minor, ...) : major;
-	    return wantarray
-		? ($version, $buildcommit, $subversions)
-		: $subversions->[0];
-	}
+    return undef if !defined $ceph_version;
+
+    my ($version, $buildcommit, $subversions) = parse_ceph_version($ceph_version);
+
+    return undef if !defined($version);
+
+    # return (version, buildid, [major, minor, ...]) : major;
+    return wantarray ? ($version, $buildcommit, $subversions) : $subversions->[0];
+}
+
+sub parse_ceph_version : prototype($) {
+    my ($ceph_version) = @_;
+
+    my $re_ceph_version = qr/
+	# Skip ahead to the version, which may optionally start with 'v'
+	^ceph.*\sv?
+
+	# Parse the version X.Y, X.Y.Z, etc.
+	( \d+ (?:\.\d+)+ ) \s+
+
+	# Parse the git commit hash between parentheses
+	(?: \( ([a-zA-Z0-9]+) \) )
+    /x;
+
+    if ($ceph_version =~ /$re_ceph_version/) {
+	my ($version, $buildcommit) = ($1, $2);
+	my $subversions = [ split(/\.|-/, $version) ];
+
+	# return (version, buildid, [major, minor, ...]) : major;
+	return wantarray
+	    ? ($version, $buildcommit, $subversions)
+	    : $subversions->[0];
     }
 
     return undef;
@@ -84,9 +114,9 @@ sub get_cluster_versions {
 sub get_config {
     my $key = shift;
 
-    my $value = $config_hash->{$key};
+    my $value = $config_values->{$key} // $config_files->{$key};
 
-    die "no such ceph config '$key'" if !$value;
+    die "no such ceph config '$key'" if ! defined($value);
 
     return $value;
 }
@@ -123,7 +153,7 @@ sub purge_all_ceph_files {
 	warn "Foreign MON address in ceph.conf. Keeping config & keyrings\n"
     } else {
 	print "Removing config & keyring files\n";
-	foreach my $file (%$config_hash) {
+	for my $file (%$config_files) {
 	    unlink $file if (-e $file);
 	}
     }
@@ -183,8 +213,14 @@ sub check_ceph_inited {
 
     return undef if !check_ceph_installed('ceph_mon', $noerr);
 
-    if (! -f $pve_ceph_cfgpath) {
-	die "pveceph configuration not initialized\n" if !$noerr;
+    my @errors;
+
+    push(@errors, "missing '$pve_ceph_cfgpath'") if ! -f $pve_ceph_cfgpath;
+    push(@errors, "missing '$pve_ceph_cfgdir'") if ! -d $pve_ceph_cfgdir;
+
+    if (@errors) {
+	my $err = 'pveceph configuration not initialized - ' . join(', ', @errors) . "\n";
+	die $err if !$noerr;
 	return undef;
     }
 
@@ -249,8 +285,16 @@ sub set_pool {
     my $keys = [ grep { $_ ne 'size' } sort keys %$param ];
     unshift @$keys, 'size' if exists $param->{size};
 
+    my $current_properties = get_pool_properties($pool, $rados);
+
     for my $setting (@$keys) {
 	my $value = $param->{$setting};
+
+	if (defined($current_properties->{$setting}) && $value eq $current_properties->{$setting}) {
+	    print "skipping '${setting}', did not change\n";
+	    delete $param->{$setting};
+	    next;
+	}
 
 	print "pool $pool: applying $setting = $value\n";
 	if (my $err = $set_pool_setting->($pool, $setting, $value, $rados)) {
@@ -407,6 +451,39 @@ sub get_or_create_admin_keyring {
 	}
     }
     return $pve_ckeyring_path;
+}
+
+# is also used in `pve-init-ceph-crash` helper
+sub create_or_update_crash_keyring_file {
+    my ($rados) = @_;
+
+    if (!defined($rados)) {
+	$rados = PVE::RADOS->new();
+    }
+
+    my $output = $rados->mon_command({
+	prefix => 'auth get-or-create',
+	entity => 'client.crash',
+	caps => [
+	    mon => 'profile crash',
+	    mgr => 'profile crash',
+	],
+	format => 'plain',
+    });
+
+    if (-f $pve_ceph_crash_key_path) {
+	my $contents = PVE::Tools::file_get_contents($pve_ceph_crash_key_path);
+
+	if ($contents ne $output) {
+	    PVE::Tools::file_set_contents($pve_ceph_crash_key_path, $output);
+	    return 1;
+	}
+    } else {
+	PVE::Tools::file_set_contents($pve_ceph_crash_key_path, $output);
+	return 1;
+    }
+
+    return 0;
 }
 
 # get ceph-volume managed osds

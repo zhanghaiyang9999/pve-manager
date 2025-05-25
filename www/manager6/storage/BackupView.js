@@ -1,6 +1,8 @@
 Ext.define('PVE.storage.BackupView', {
     extend: 'PVE.storage.ContentView',
 
+    onlineHelp: 'chapter_vzdump',
+
     alias: 'widget.pveStorageBackupView',
 
     showColumns: ['name', 'notes', 'protected', 'date', 'format', 'size'],
@@ -84,9 +86,9 @@ Ext.define('PVE.storage.BackupView', {
 		disabled: true,
 		handler: function(b, e, rec) {
 		    let vmtype;
-		    if (PVE.Utils.volume_is_qemu_backup(rec.data.volid, rec.data.format)) {
+		    if (PVE.Utils.volume_is_qemu_backup(rec.data)) {
 			vmtype = 'qemu';
-		    } else if (PVE.Utils.volume_is_lxc_backup(rec.data.volid, rec.data.format)) {
+		    } else if (PVE.Utils.volume_is_lxc_backup(rec.data)) {
 			vmtype = 'lxc';
 		    } else {
 			return;

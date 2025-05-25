@@ -1,16 +1,16 @@
 include /usr/share/dpkg/default.mk
 include defines.mk
 
-export PVERELEASE = $(shell echo $(DEB_VERSION_UPSTREAM) | cut -c 1-3)
+export PVERELEASE = $(shell echo $(DEB_VERSION_UPSTREAM) | cut -d. -f1-2)
 export VERSION = $(DEB_VERSION_UPSTREAM_REVISION)
 
 BUILDDIR = $(PACKAGE)-$(DEB_VERSION_UPSTREAM)
 
 DSC=$(PACKAGE)_$(DEB_VERSION).dsc
-DEB=$(PACKAGE)_$(DEB_VERSION)_$(DEB_HOST_ARCH).deb
+DEB=$(PACKAGE)_$(DEB_VERSION)_all.deb
 
 DESTDIR=
-SUBDIRS = aplinfo PVE bin www services configs network-hooks test
+SUBDIRS = aplinfo PVE bin www services configs network-hooks test templates
 
 all: $(SUBDIRS)
 	set -e && for i in $(SUBDIRS); do $(MAKE) -C $$i; done

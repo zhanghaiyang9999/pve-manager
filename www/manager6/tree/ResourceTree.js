@@ -37,10 +37,25 @@ Ext.define('PVE.tree.ResourceTree', {
 	    template: {
 		iconCls: 'fa fa-file-o',
 	    },
+	    tag: {
+		iconCls: 'fa fa-tag',
+	    },
 	},
     },
 
     useArrows: true,
+
+    // private
+    getTypeOrder: function(type) {
+	switch (type) {
+	    case 'lxc': return 0;
+	    case 'qemu': return 1;
+	    case 'node': return 2;
+	    case 'sdn': return 3;
+	    case 'storage': return 4;
+	    default: return 9;
+	}
+    },
 
     // private
     nodeSortFn: function(node1, node2) {
@@ -52,10 +67,9 @@ Ext.define('PVE.tree.ResourceTree', {
 	    let n2IsGuest = n2.type === 'qemu' || n2.type === 'lxc';
 	    if (me['group-guest-types'] || !n1IsGuest || !n2IsGuest) {
 		// first sort (group) by type
-		if (n1.type > n2.type) {
-		    return 1;
-		} else if (n1.type < n2.type) {
-		    return -1;
+		let res = me.getTypeOrder(n1.type) - me.getTypeOrder(n2.type);
+		if (res !== 0) {
+		    return res;
 		}
 	    }
 
@@ -134,22 +148,25 @@ Ext.define('PVE.tree.ResourceTree', {
     },
 
     getToolTip: function(info) {
-	if (info.type === 'pool' || info.groupbyid !== undefined) {
-	    return undefined;
+	let qtips = [];
+	if (info.qmpstatus || info.status) {
+	    qtips.push(Ext.String.format(gettext('Status: {0}'), info.qmpstatus || info.status));
 	}
-
-	let qtips = [gettext('Status') + ': ' + (info.qmpstatus || info.status)];
 	if (info.lock) {
 	    qtips.push(Ext.String.format(gettext('Config locked ({0})'), info.lock));
 	}
 	if (info.hastate !== 'unmanaged') {
-	    qtips.push(gettext('HA State') + ": " + info.hastate);
+	    qtips.push(Ext.String.format(gettext('HA State: {0}'), info.hastate));
 	}
 	if (info.type === 'storage') {
 	    let usage = info.disk / info.maxdisk;
 	    if (usage >= 0.0 && usage <= 1.0) {
 		qtips.push(Ext.String.format(gettext("Usage: {0}%"), (usage*100).toFixed(2)));
 	    }
+	}
+
+	if (qtips.length === 0) {
+	    return undefined;
 	}
 
 	let tip = qtips.join(', ');
@@ -165,12 +182,15 @@ Ext.define('PVE.tree.ResourceTree', {
 	me.setText(info);
 
 	if (info.groupbyid) {
-	    info.text = info.groupbyid;
-	    if (info.type === 'type') {
+	    if (me.viewFilter.groupRenderer) {
+		info.text = me.viewFilter.groupRenderer(info);
+	    } else if (info.type === 'type') {
 		let defaults = PVE.tree.ResourceTree.typeDefaults[info.groupbyid];
 		if (defaults && defaults.text) {
 		    info.text = defaults.text;
 		}
+	    } else {
+		info.text = info.groupbyid;
 	    }
 	}
 	let child = Ext.create('PVETree', info);
@@ -267,6 +287,30 @@ Ext.define('PVE.tree.ResourceTree', {
 	    'text', 'running', 'template', 'status', 'qmpstatus', 'hastate', 'lock', 'tags',
 	];
 
+	// special case ids from the tag view, since they change the id in the state
+	let idMapFn = function(id) {
+	    if (!id) {
+		return undefined;
+	    }
+	    if (id.startsWith('qemu') || id.startsWith('lxc')) {
+		let [realId, _tag] = id.split('-');
+		return realId;
+	    }
+	    return id;
+	};
+
+	let findNode = function(rootNode, id) {
+	    if (!id) {
+		return undefined;
+	    }
+	    let node = rootNode.findChild('id', id, true);
+	    if (!node) {
+		node = rootNode.findChildBy((r) => idMapFn(r.data.id) === idMapFn(id), undefined, true);
+	    }
+	    return node;
+	};
+
+
 	let updateTree = function() {
 	    store.suspendEvents();
 
@@ -282,22 +326,31 @@ Ext.define('PVE.tree.ResourceTree', {
 
 	    let groups = me.viewFilter.groups || [];
 	    // explicitly check for node/template, as those are not always grouping attributes
+	    let attrMoveChecks = me.viewFilter.attrMoveChecks ?? {};
+
 	    // also check for name for when the tree is sorted by name
 	    let moveCheckAttrs = groups.concat(['node', 'template', 'name']);
-	    let filterfn = me.viewFilter.filterfn;
+	    let filterFn = me.viewFilter.getFilterFn ? me.viewFilter.getFilterFn() : Ext.identityFn;
 
 	    let reselect = false; // for disappeared nodes
 	    let index = pdata.dataIndex;
 	    // remove vanished or moved items and update changed items in-place
 	    for (const [key, olditem] of Object.entries(index)) {
 		// getById() use find(), which is slow (ExtJS4 DP5)
-		let item = rstore.data.get(olditem.data.id);
+		let oldid = olditem.data.id;
+		let id = idMapFn(olditem.data.id);
+		let item = rstore.data.get(id);
 
 		let changed = sorting_changed, moved = sorting_changed;
 		if (item) {
 		    // test if any grouping attributes changed, catches migrated tree-nodes in server view too
 		    for (const attr of moveCheckAttrs) {
-			if (item.data[attr] !== olditem.data[attr]) {
+			if (attrMoveChecks[attr]) {
+			    if (attrMoveChecks[attr](olditem, item)) {
+				moved = true;
+				break;
+			    }
+			} else if (item.data[attr] !== olditem.data[attr]) {
 			    moved = true;
 			    break;
 			}
@@ -317,6 +370,9 @@ Ext.define('PVE.tree.ResourceTree', {
 		    olditem.beginEdit();
 		    let info = olditem.data;
 		    Ext.apply(info, item.data);
+		    if (info.id !== oldid) {
+			info.id = oldid;
+		    }
 		    me.setIconCls(info);
 		    me.setText(info);
 		    olditem.commit();
@@ -333,15 +389,20 @@ Ext.define('PVE.tree.ResourceTree', {
 		    // store events are suspended, so remove the item manually
 		    store.remove(olditem);
 		    parentNode.removeChild(olditem, true);
+		    if (parentNode.childNodes.length < 1 && parentNode.parentNode) {
+			let grandParent = parentNode.parentNode;
+			grandParent.removeChild(parentNode, true);
+		    }
 		}
 	    }
 
-	    rstore.each(function(item) { // add new items
+	    let items = rstore.getData().items.flatMap(me.viewFilter.itemMap ?? Ext.identityFn);
+	    items.forEach(function(item) { // add new items
 		let olditem = index[item.data.id];
 		if (olditem) {
 		    return;
 		}
-		if (filterfn && !filterfn(item)) {
+		if (filterFn && !filterFn(item)) {
 		    return;
 		}
 		let info = Ext.apply({ leaf: true }, item.data);
@@ -355,8 +416,10 @@ Ext.define('PVE.tree.ResourceTree', {
 	    store.resumeEvents();
 	    store.fireEvent('refresh', store);
 
+	    let foundChild = findNode(rootnode, lastsel?.data.id);
+
 	    // select parent node if original selected node vanished
-	    if (lastsel && !rootnode.findChild('id', lastsel.data.id, true)) {
+	    if (lastsel && !foundChild) {
 		lastsel = rootnode;
 		for (const node of parents) {
 		    if (rootnode.findChild('id', node.data.id, true)) {
@@ -476,7 +539,7 @@ Ext.define('PVE.tree.ResourceTree', {
 		if (nodeid === 'root') {
 		    node = rootnode;
 		} else {
-		    node = rootnode.findChild('id', nodeid, true);
+		    node = findNode(rootnode, nodeid);
 		}
 		if (node) {
 		    me.selectExpand(node);
@@ -498,6 +561,24 @@ Ext.define('PVE.tree.ResourceTree', {
 
 	rstore.on("load", updateTree);
 	rstore.startUpdate();
+
+	me.mon(Ext.GlobalEvents, 'loadedUiOptions', () => {
+	    me.store.getRootNode().cascadeBy({
+		before: function(node) {
+		    if (node.data.groupbyid) {
+			node.beginEdit();
+			let info = node.data;
+			me.setIconCls(info);
+			me.setText(info);
+			if (me.viewFilter.groupRenderer) {
+			    info.text = me.viewFilter.groupRenderer(info);
+			}
+			node.commit();
+		    }
+		    return true;
+		},
+	    });
+	});
     },
 
 });

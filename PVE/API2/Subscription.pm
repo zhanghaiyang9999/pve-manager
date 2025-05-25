@@ -2,28 +2,28 @@ package PVE::API2::Subscription;
 
 use strict;
 use warnings;
+
 use Digest::MD5 qw(md5_hex md5_base64);
-use MIME::Base64;
 use HTTP::Request;
-use LWP::UserAgent;
 use JSON;
+use LWP::UserAgent;
+use MIME::Base64;
 
 use Proxmox::RS::Subscription;
 
-use PVE::Tools;
-use PVE::ProcFSTools;
-use PVE::Exception qw(raise_param_exc);
-use PVE::INotify;
+use PVE::AccessControl;
 use PVE::Cluster qw (cfs_read_file cfs_write_file);
 use PVE::DataCenterConfig;
-use PVE::AccessControl;
-use PVE::Storage;
+use PVE::Exception qw(raise_param_exc);
+use PVE::INotify;
 use PVE::JSONSchema qw(get_standard_option);
-
+use PVE::ProcFSTools;
 use PVE::SafeSyslog;
+use PVE::Storage;
+use PVE::Tools;
 
+use PVE::Ceph::Releases;
 use PVE::API2Tools;
-use PVE::RESTHandler;
 
 use base qw(PVE::RESTHandler);
 
@@ -95,16 +95,18 @@ sub write_etc_subscription {
         $filename, "/etc/apt/auth.conf.d/pve.conf", "enterprise.proxmox.com/debian/pve", $info);
 
     if (!(defined($info->{key}) && defined($info->{serverid}))) {
-	unlink "/etc/apt/auth.conf.d/ceph.conf";
+	unlink "/etc/apt/auth.conf.d/ceph.conf" or $!{ENOENT} or die "failed to remove apt auth ceph.conf - $!";
     } else {
-	# FIXME: improve this, especially the selection of valid ceph-releases
-	# NOTE: currently we should add future ceph releases as early as possible, to ensure that
+	my $supported_ceph_releases = PVE::Ceph::Releases::get_available_ceph_release_codenames(1);
 	my $ceph_auth = '';
-	for my $ceph_release ('quincy', 'reef') {
+	for my $ceph_release ($supported_ceph_releases->@*) {
 	    $ceph_auth .= "machine enterprise.proxmox.com/debian/ceph-${ceph_release}"
 	    ." login $info->{key} password $info->{serverid}\n"
 	}
-	PVE::Tools::file_set_contents("/etc/apt/auth.conf.d/ceph.conf", $ceph_auth);
+	# add a generic one to handle the case where a new ceph release was made available while
+	# the subscription info was not yet updated, and as per APT_AUTH.CONF(5) start-with matches.
+	$ceph_auth .= "machine enterprise.proxmox.com/debian/ceph login $info->{key} password $info->{serverid}\n";
+	PVE::Tools::file_set_contents("/etc/apt/auth.conf.d/ceph.conf", $ceph_auth, 0600);
     }
 }
 
@@ -121,7 +123,72 @@ __PACKAGE__->register_method ({
 	    node => get_standard_option('pve-node'),
 	},
     },
-    returns => { type => 'object'},
+    returns => {
+	type => 'object',
+	additionalProperties => 0,
+	properties => {
+	    status => {
+		type => 'string',
+		enum => [qw(new notfound active invalid expired suspended)],
+		description => "The current subscription status.",
+	    },
+	    checktime => {
+		type => 'integer',
+		description => 'Timestamp of the last check done.',
+		optional => 1,
+	    },
+	    key => {
+		type => 'string',
+		description => 'The subscription key, if set and permitted to access.',
+		optional => 1,
+	    },
+	    level => {
+		type => 'string',
+		description => 'A short code for the subscription level.',
+		optional => 1,
+	    },
+	    message => {
+		type => 'string',
+		description => 'A more human readable status message.',
+		optional => 1,
+	    },
+	    nextduedate => {
+		type => 'string',
+		description => 'Next due date of the set subscription.',
+		optional => 1,
+	    },
+	    productname => {
+		type => 'string',
+		description => 'Human readable productname of the set subscription.',
+		optional => 1,
+	    },
+	    regdate => {
+		type => 'string',
+		description => 'Register date of the set subscription.',
+		optional => 1,
+	    },
+	    serverid => {
+		type => 'string',
+		description => 'The server ID, if permitted to access.',
+		optional => 1,
+	    },
+	    signature => {
+		type => 'string',
+		description => 'Signature for offline keys',
+		optional => 1,
+	    },
+	    sockets => {
+		type => 'integer',
+		description => 'The number of sockets for this host.',
+		optional => 1,
+	    },
+	    url => {
+		type => 'string',
+		description => 'URL to the web shop.',
+		optional => 1,
+	    },
+	},
+    },
     code => sub {
 	my ($param) = @_;
 

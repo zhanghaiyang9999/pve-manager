@@ -247,6 +247,7 @@ Ext.define('PVE.StdWorkspace', {
 			    storage: 'PVE.storage.Browser',
 			    sdn: 'PVE.sdn.Browser',
 			    pool: 'pvePoolConfig',
+			    tag: 'pveTagConfig',
 			};
 			PVE.curSelectedNode = treeNode;
 			me.setContent({
@@ -382,6 +383,8 @@ Ext.define('PVE.StdWorkspace', {
 				    handler: function() {
 					var win = Ext.create('Proxmox.window.PasswordEdit', {
 					    userid: Proxmox.UserName,
+					    confirmCurrentPassword: Proxmox.UserName !== 'root@pam',
+					    minLength: 8,
 					});
 					win.show();
 				    },
@@ -530,7 +533,8 @@ Ext.define('PVE.StdWorkspace', {
 	let tagSelectors = [];
 	['circle', 'dense'].forEach((style) => {
 	    ['dark', 'light'].forEach((variant) => {
-		tagSelectors.push(`.proxmox-tags-${style} .proxmox-tag-${variant}`);
+		let selector = `.proxmox-tags-${style} :not(.proxmox-tags-full) > .proxmox-tag-${variant}`;
+		tagSelectors.push(selector);
 	    });
 	});
 

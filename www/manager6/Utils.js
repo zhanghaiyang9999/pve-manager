@@ -51,7 +51,7 @@ Ext.define('PVE.Utils', {
 	    { desc: '2.4 Kernel', val: 'l24' },
 	],
 	'Microsoft Windows': [
-	    { desc: '11/2022', val: 'win11' },
+	    { desc: '11/2022/2025', val: 'win11' },
 	    { desc: '10/2016/2019', val: 'win10' },
 	    { desc: '8.x/2012/2012r2', val: 'win8' },
 	    { desc: '7/2008r2', val: 'win7' },
@@ -118,7 +118,8 @@ Ext.define('PVE.Utils', {
 	}
 
 	if (service.ceph_version) {
-	    var match = service.ceph_version.match(/version (\d+(\.\d+)*)/);
+	    // See PVE/Ceph/Tools.pm - get_local_version
+	    const match = service.ceph_version.match(/^ceph.*\sv?(\d+(?:\.\d+)+)/);
 	    if (match) {
 		return match[1];
 	    }
@@ -184,23 +185,23 @@ Ext.define('PVE.Utils', {
 
     render_sdn_pending: function(rec, value, key, index) {
 	if (rec.data.state === undefined || rec.data.state === null) {
-	    return value;
+	    return Ext.htmlEncode(value);
 	}
 
 	if (rec.data.state === 'deleted') {
 	    if (value === undefined) {
 		return ' ';
 	    } else {
-		return '<div style="text-decoration: line-through;">'+ value +'</div>';
+		return `<div style="text-decoration: line-through;">${Ext.htmlEncode(value)}</div>`;
 	    }
 	} else if (rec.data.pending[key] !== undefined && rec.data.pending[key] !== null) {
 	    if (rec.data.pending[key] === 'deleted') {
 		return ' ';
 	    } else {
-		return rec.data.pending[key];
+		return Ext.htmlEncode(rec.data.pending[key]);
 	    }
 	}
-	return value;
+	return Ext.htmlEncode(value);
     },
 
     render_sdn_pending_state: function(rec, value) {
@@ -211,7 +212,7 @@ Ext.define('PVE.Utils', {
 	let icon = `<i class="fa fa-fw fa-refresh warning"></i>`;
 
 	if (value === 'deleted') {
-	    return '<span>' + icon + value + '</span>';
+	    return `<span>${icon}${Ext.htmlEncode(value)}</span>`;
 	}
 
 	let tip = gettext('Pending Changes') + ': <br>';
@@ -220,10 +221,10 @@ Ext.define('PVE.Utils', {
 	    if ((rec.data[key] !== undefined && rec.data.pending[key] !== rec.data[key]) ||
 		rec.data[key] === undefined
 	    ) {
-		tip += `${key}: ${keyvalue} <br>`;
+		tip += `${Ext.htmlEncode(key)}: ${Ext.htmlEncode(keyvalue)} <br>`;
 	    }
 	}
-	return '<span data-qtip="' + tip + '">'+ icon + value + '</span>';
+	return `<span data-qtip="${Ext.htmlEncode(tip)}">${icon}${Ext.htmlEncode(value)}</span>`;
     },
 
     render_ceph_health: function(healthObj) {
@@ -685,19 +686,31 @@ Ext.define('PVE.Utils', {
 
     contentTypes: {
 	'images': gettext('Disk image'),
-	'backup': gettext('VZDump backup file'),
+	'backup': gettext('Backup'),
 	'vztmpl': gettext('Container template'),
 	'iso': gettext('ISO image'),
 	'rootdir': gettext('Container'),
 	'snippets': gettext('Snippets'),
+	'import': gettext('Import'),
     },
 
-    volume_is_qemu_backup: function(volid, format) {
-	return format === 'pbs-vm' || volid.match(':backup/vzdump-qemu-');
+     // volume can be a full volume info object, in which case the format parameter is ignored, or
+     // you can pass the volume ID and format as separate string parameters.
+    volume_is_qemu_backup: function(volume, format) {
+	let volid, subtype;
+	if (typeof volume === 'string') {
+	    volid = volume;
+	} else if (typeof volume === 'object') {
+	    ({ volid, format, subtype } = volume);
+	} else {
+	    console.error("internal error - unexpected type", volume);
+	}
+	return format === 'pbs-vm' || volid.match(':backup/vzdump-qemu-') || subtype === 'qemu';
     },
 
-    volume_is_lxc_backup: function(volid, format) {
-	return format === 'pbs-ct' || volid.match(':backup/vzdump-(lxc|openvz)-');
+    volume_is_lxc_backup: function(volume) {
+	return volume.format === 'pbs-ct' || volume.volid.match(':backup/vzdump-(lxc|openvz)-') ||
+	    volume.subtype === 'lxc';
     },
 
     authSchema: {
@@ -837,6 +850,12 @@ Ext.define('PVE.Utils', {
 	drbd: {
 	    name: 'DRBD',
 	    hideAdd: true,
+	    backups: false,
+	},
+	esxi: {
+	    name: 'ESXi',
+	    ipanel: 'ESXIInputPanel',
+	    faIcon: 'cloud-download',
 	    backups: false,
 	},
     },
@@ -1016,6 +1035,14 @@ Ext.define('PVE.Utils', {
 	    result = "CH " +
 		Ext.String.leftPad(data.channel, 2, '0') +
 		" ID " + data.id + " LUN " + data.lun;
+	} else if (data.content === 'import') {
+	    if (data.volid.match(/^.*?:import\//)) {
+		// dir-based storages
+		result = data.volid.replace(/^.*?:import\//, '');
+	    } else {
+		// esxi storage
+		result = data.volid.replace(/^.*?:/, '');
+	    }
 	} else {
 	    result = data.volid.replace(/^.*?:(.*?\/)?/, '');
 	}
@@ -1065,13 +1092,14 @@ Ext.define('PVE.Utils', {
 	}
 	var maxcpu = node.data.maxcpu || 1;
 
-	if (!Ext.isNumeric(maxcpu) && (maxcpu >= 1)) {
+	if (!Ext.isNumeric(maxcpu) || maxcpu < 1) {
 	    return '';
 	}
 
 	var per = (record.data.cpu/maxcpu) * record.data.maxcpu * 100;
+	const cpu_label = maxcpu > 1 ? 'CPUs' : 'CPU';
 
-	return per.toFixed(1) + '% of ' + maxcpu.toString() + (maxcpu > 1 ? 'CPUs' : 'CPU');
+	return `${per.toFixed(1)}% of ${maxcpu} ${cpu_label}`;
     },
 
     render_bandwidth: function(value) {
@@ -1236,6 +1264,8 @@ Ext.define('PVE.Utils', {
 	    // templates
 	    objType = 'template';
 	    status = type;
+	} else if (type === 'storage' && record.content === 'import') {
+	    return 'fa fa-cloud-download';
 	} else {
 	    // everything else
 	    status = record.status + ' ha-' + record.hastate;
@@ -1269,7 +1299,7 @@ Ext.define('PVE.Utils', {
 	var type = record.data.type;
 	var id = record.data.id;
 
-	return Proxmox.Utils.format_task_description(type, id);
+	return Ext.htmlEncode(Proxmox.Utils.format_task_description(type, id));
     },
 
     render_optional_url: function(value) {
@@ -1580,14 +1610,14 @@ Ext.define('PVE.Utils', {
 	}
     },
 
-    mp_counts: {
+    lxc_mp_counts: {
 	mp: 256,
 	unused: 256,
     },
 
-    forEachMP: function(func, includeUnused) {
-	for (let i = 0; i < PVE.Utils.mp_counts.mp; i++) {
-	    let cont = func('mp', i);
+    forEachLxcMP: function(func, includeUnused) {
+	for (let i = 0; i < PVE.Utils.lxc_mp_counts.mp; i++) {
+	    let cont = func('mp', i, `mp${i}`);
 	    if (!cont && cont !== undefined) {
 		return;
 	    }
@@ -1597,8 +1627,19 @@ Ext.define('PVE.Utils', {
 	    return;
 	}
 
-	for (let i = 0; i < PVE.Utils.mp_counts.unused; i++) {
-	    let cont = func('unused', i);
+	for (let i = 0; i < PVE.Utils.lxc_mp_counts.unused; i++) {
+	    let cont = func('unused', i, `unused${i}`);
+	    if (!cont && cont !== undefined) {
+		return;
+	    }
+	}
+    },
+
+    lxc_dev_count: 256,
+
+    forEachLxcDev: function(func) {
+	for (let i = 0; i < PVE.Utils.lxc_dev_count; i++) {
+	    let cont = func(i, `dev${i}`);
 	    if (!cont && cont !== undefined) {
 		return;
 	    }
@@ -1615,6 +1656,7 @@ Ext.define('PVE.Utils', {
 	serial: 4,
 	rng: 1,
 	tpmstate: 1,
+	virtiofs: 10,
     },
 
     // we can have usb6 and up only for specific machine/ostypes
@@ -1704,7 +1746,7 @@ Ext.define('PVE.Utils', {
 	    } else {
 		msg = gettext('Connection error');
 	    }
-	    Proxmox.Utils.setErrorMask(view, msg);
+	    Proxmox.Utils.setErrorMask(view, Ext.htmlEncode(msg));
 	});
     },
 
@@ -1861,8 +1903,8 @@ Ext.define('PVE.Utils', {
 	return undefined;
     },
 
-    nextFreeMP: function(type, config) {
-	for (let i = 0; i < PVE.Utils.mp_counts[type]; i++) {
+    nextFreeLxcMP: function(type, config) {
+	for (let i = 0; i < PVE.Utils.lxc_mp_counts[type]; i++) {
 	    let confid = `${type}${i}`;
 	    if (!Ext.isDefined(config[confid])) {
 		return {
@@ -1937,6 +1979,22 @@ Ext.define('PVE.Utils', {
 	}
 	return languageCookie || Proxmox.defaultLang || 'en';
     },
+
+    getFormattedGuestIdentifier: function(vmid, guestName) {
+	if (PVE.UIOptions.getTreeSortingValue('sort-field') === 'vmid') {
+	    return guestName ? `${vmid} (${guestName})` : vmid;
+	} else {
+	    return guestName ? `${guestName} (${vmid})` : vmid;
+	}
+    },
+
+    formatGuestTaskConfirmation: function(taskType, vmid, guestName) {
+	let description = Proxmox.Utils.format_task_description(
+		taskType,
+		this.getFormattedGuestIdentifier(vmid, guestName),
+	);
+	return Ext.htmlEncode(description);
+    },
 },
 
     singleton: true,
@@ -2008,6 +2066,7 @@ Ext.define('PVE.Utils', {
 	    qmsuspend: ['VM', gettext('Hibernate')],
 	    qmtemplate: ['VM', gettext('Convert to template')],
 	    resize: ['VM/CT', gettext('Resize')],
+	    reloadnetworkall: ['', gettext('Reload network configuration on all nodes')],
 	    spiceproxy: ['VM/CT', gettext('Console') + ' (Spice)'],
 	    spiceshell: ['', gettext('Shell') + ' (Spice)'],
 	    startall: ['', gettext('Bulk start VMs and Containers')],
@@ -2037,6 +2096,17 @@ Ext.define('PVE.Utils', {
 	    vzumount: ['CT', gettext('Unmount')],
 	    zfscreate: [gettext('ZFS Storage'), gettext('Create')],
 	    zfsremove: ['ZFS Pool', gettext('Remove')],
+	});
+
+	Proxmox.Utils.overrideNotificationFieldName({
+	    'job-id': gettext('Job ID'),
+	});
+
+	Proxmox.Utils.overrideNotificationFieldValue({
+	    'package-updates': gettext('Package updates are available'),
+	    'vzdump': gettext('Backup notifications'),
+	    'replication': gettext('Replication job notifications'),
+	    'fencing': gettext('Node fencing notifications'),
 	});
     },
 

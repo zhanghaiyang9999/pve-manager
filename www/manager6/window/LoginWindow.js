@@ -18,8 +18,21 @@ Ext.define('PVE.window.LoginWindow', {
     },
 
     controller: {
-
 	xclass: 'Ext.app.ViewController',
+
+	init: async function() {
+	    if (Proxmox.ConsentText) {
+		let oidc_auth_redirect = Proxmox.Utils.getOpenIDRedirectionAuthorization();
+		if (oidc_auth_redirect === undefined) {
+		    Ext.create("Proxmox.window.ConsentModal", {
+			autoShow: true,
+			consent: Proxmox.Markdown.parse(
+			    Proxmox.Utils.base64ToUtf8(Proxmox.ConsentText),
+			),
+		    });
+		}
+	    }
+	},
 
 	onLogon: async function() {
 	    var me = this;
@@ -344,6 +357,7 @@ Ext.define('PVE.window.LoginWindow', {
 		itemId: 'usernameField',
 		reference: 'usernameField',
 		stateId: 'login-username',
+		inputAttrTpl: 'autocomplete=username',
 		bind: {
 		    visible: "{!openid}",
 		    disabled: "{openid}",
@@ -355,6 +369,7 @@ Ext.define('PVE.window.LoginWindow', {
 		fieldLabel: gettext('Password'),
 		name: 'password',
 		reference: 'passwordField',
+		inputAttrTpl: 'autocomplete=current-password',
 		bind: {
 		    visible: "{!openid}",
 		    disabled: "{openid}",

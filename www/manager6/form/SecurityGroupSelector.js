@@ -34,7 +34,14 @@ Ext.define('PVE.form.SecurityGroupsSelector', {
 		    {
 			header: gettext('Comment'),
 			dataIndex: 'comment',
-			renderer: Ext.String.htmlEncode,
+			renderer: function(value, metaData) {
+			    let comment = Ext.String.htmlEncode(value) || '';
+			    if (comment.length * 12 > metaData.column.cellWidth) {
+				let qtip = Ext.htmlEncode(comment);
+				comment = `<span data-qtip="${qtip}">${comment}</span>`;
+			    }
+			    return comment;
+			},
 			flex: 1,
 		    },
 		],

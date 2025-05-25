@@ -227,6 +227,7 @@ __PACKAGE__->register_method({
 	properties => {
 	    type => {
 		type => 'string',
+		description => 'Resource type.',
 		optional => 1,
 		enum => ['vm', 'storage', 'node', 'sdn'],
 	    },
@@ -257,51 +258,73 @@ __PACKAGE__->register_method({
 		    optional => 1,
 		},
 		node => get_standard_option('pve-node', {
-		    description => "The cluster node name (when type in node,storage,qemu,lxc).",
+		    description => "The cluster node name"
+			." (for types 'node', 'storage', 'qemu', and 'lxc').",
 		    optional => 1,
 		}),
 		storage => get_standard_option('pve-storage-id', {
-		    description => "The storage identifier (when type == storage).",
+		    description => "The storage identifier (for type 'storage').",
 		    optional => 1,
 		}),
 		pool => {
-		    description => "The pool name (when type in pool,qemu,lxc).",
+		    description => "The pool name (for types 'pool', 'qemu' and 'lxc').",
 		    type => 'string',
 		    optional => 1,
 		},
 		cpu => {
-		    description => "CPU utilization (when type in node,qemu,lxc).",
+		    description => "CPU utilization (for types 'node', 'qemu' and 'lxc').",
 		    type => 'number',
 		    optional => 1,
 		    minimum => 0,
 		    renderer => 'fraction_as_percentage',
 		},
 		maxcpu => {
-		    description => "Number of available CPUs (when type in node,qemu,lxc).",
+		    description => "Number of available CPUs (for types 'node', 'qemu' and 'lxc').",
 		    type => 'number',
 		    optional => 1,
 		    minimum => 0,
 		},
 		mem => {
-		    description => "Used memory in bytes (when type in node,qemu,lxc).",
+		    description => "Used memory in bytes (for types 'node', 'qemu' and 'lxc').",
 		    type => 'integer',
 		    optional => 1,
 		    renderer => 'bytes',
 		    minimum => 0,
 		},
 		maxmem => {
-		    description => "Number of available memory in bytes (when type in node,qemu,lxc).",
+		    description => "Number of available memory in bytes"
+			." (for types 'node', 'qemu' and 'lxc').",
+		    type => 'integer',
+		    optional => 1,
+		    renderer => 'bytes',
+		},
+		netin => {
+		    description => "The amount of traffic in bytes that was sent to the guest over"
+			." the network since it was started. (for types 'qemu' and 'lxc')",
+		    type => 'integer',
+		    optional => 1,
+		    renderer => 'bytes',
+		},
+		netout => {
+		    description => "The amount of traffic in bytes that was sent from the guest"
+			." over the network since it was started. (for types 'qemu' and 'lxc')",
 		    type => 'integer',
 		    optional => 1,
 		    renderer => 'bytes',
 		},
 		level => {
-		    description => "Support level (when type == node).",
+		    description => "Support level (for type 'node').",
+		    type => 'string',
+		    optional => 1,
+		},
+		lock => {
+		    description => "The guest's current config lock (for types 'qemu' and 'lxc')",
 		    type => 'string',
 		    optional => 1,
 		},
 		uptime => {
-		    description => "Node uptime in seconds (when type in node,qemu,lxc).",
+		    description => "Uptime of node or virtual guest in seconds"
+			." (for types 'node', 'qemu' and 'lxc').",
 		    type => 'integer',
 		    optional => 1,
 		    renderer => 'duration',
@@ -312,21 +335,39 @@ __PACKAGE__->register_method({
 		    optional => 1,
 		},
 		disk => {
-		    description => "Used disk space in bytes (when type in storage), used root image spave for VMs (type in qemu,lxc).",
+		    description => "Used disk space in bytes (for type 'storage'),"
+			." used root image space for VMs (for types 'qemu' and 'lxc').",
 		    type => 'integer',
 		    optional => 1,
 		    renderer => 'bytes',
 		    minimum => 0,
 		},
 		maxdisk => {
-		    description => "Storage size in bytes (when type in storage), root image size for VMs (type in qemu,lxc).",
+		    description => "Storage size in bytes (for type 'storage'),"
+			." root image size for VMs (for types 'qemu' and 'lxc').",
 		    type => 'integer',
 		    optional => 1,
 		    renderer => 'bytes',
 		    minimum => 0,
 		},
+		diskread => {
+		    description => "The amount of bytes the guest read from its block devices since"
+			." the guest was started. This info is not available for all storage types."
+			." (for types 'qemu' and 'lxc')",
+		    type => 'integer',
+		    optional => 1,
+		    renderer => 'bytes',
+		},
+		diskwrite => {
+		    description => "The amount of bytes the guest wrote to its block devices since"
+			." the guest was started. This info is not available for all storage types."
+			." (for types 'qemu' and 'lxc')",
+		    type => 'integer',
+		    optional => 1,
+		    renderer => 'bytes',
+		},
 		content => {
-		    description => "Allowed storage content types (when type == storage).",
+		    description => "Allowed storage content types (for type 'storage').",
 		    type => 'string',
 		    format => 'pve-storage-content-list',
 		    optional => 1,
@@ -337,13 +378,25 @@ __PACKAGE__->register_method({
 		    optional => 1,
 		},
 		vmid => get_standard_option('pve-vmid', {
-		    description => "The numerical vmid (when type in qemu,lxc).",
+		    description => "The numerical vmid (for types 'qemu' and 'lxc').",
 		    optional => 1,
 		}),
 		'cgroup-mode' => {
-		    description => "The cgroup mode the node operates under (when type == node).",
+		    description => "The cgroup mode the node operates under (for type 'node').",
 		    type => 'integer',
 		    optional => 1,
+		},
+		tags => {
+		    description => "The guest's tags (for types 'qemu' and 'lxc')",
+		    type  => "string",
+		    optional => 1,
+		},
+		template => {
+		    description => "Determines if the guest is a template."
+			." (for types 'qemu' and 'lxc')",
+		    type => 'boolean',
+		    optional => 1,
+		    default => 0,
 		},
 	    },
 	},
@@ -462,6 +515,9 @@ __PACKAGE__->register_method({
 		my $info = eval { decode_json($static_node_info->{$node}); };
 		if (defined(my $mode = $info->{'cgroup-mode'})) {
 		    $entry->{'cgroup-mode'} = int($mode);
+		}
+		if (defined(my $status = $hastatus->{node_status}->{$node})) {
+		    $entry->{'hastate'} = $status;
 		}
 
 		push @$res, $entry;

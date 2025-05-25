@@ -31,12 +31,15 @@ my $init_report_cmds = sub {
 	    cmds => [
 		'hostname',
 		'date -R',
+		'cat /proc/cmdline',
 		'pveversion --verbose',
 		'cat /etc/hosts',
 		'pvesubscription get',
 		'cat /etc/apt/sources.list',
-		sub { dir2text('/etc/apt/sources.list.d/', '.*list') },
-		sub { dir2text('/etc/apt/sources.list.d/', '.*sources') },
+		sub { dir2text('/etc/apt/sources.list.d/', '.+\.list') },
+		sub { dir2text('/etc/apt/sources.list.d/', '.+\.sources') },
+		'apt-cache policy | grep -vP "^ +origin "',
+		'apt-mark showhold',
 		'lscpu',
 		'pvesh get /cluster/resources --type node --output-format=yaml',
 	    ],
@@ -64,9 +67,9 @@ my $init_report_cmds = sub {
 	    order => 40,
 	    cmds => [
 		'qm list',
-		sub { dir2text('/etc/pve/qemu-server/', '\d.*conf') },
+		sub { dir2text('/etc/pve/qemu-server/', '\d+\.conf') },
 		'pct list',
-		sub { dir2text('/etc/pve/lxc/', '\d.*conf') },
+		sub { dir2text('/etc/pve/lxc/', '\d+\.conf') },
 	    ],
 	},
 	network => {
@@ -77,14 +80,17 @@ my $init_report_cmds = sub {
 		'ip -details -6 route show',
 		'cat /etc/network/interfaces',
 		sub { dir2text('/etc/network/interfaces.d/', '.*') },
-		sub { dir2text('/etc/pve/sdn/', '.*') },
+		'cat /etc/pve/sdn/.running-config',
+		sub { dir2text('/etc/pve/sdn/', '.+\.cfg') },
+		sub { dir2text('/etc/pve/sdn/', '.+\.json') },
 	    ],
 	},
 	firewall => {
 	    order => 50,
 	    cmds => [
-		sub { dir2text('/etc/pve/firewall/', '.*fw') },
+		sub { dir2text('/etc/pve/firewall/', '.+\.fw') },
 		'cat /etc/pve/local/host.fw',
+		sub { dir2text('/etc/pve/sdn/firewall/', '.+\.fw') },
 		'iptables-save -c | column -t -l4 -o" "',
 	    ],
 	},
@@ -98,6 +104,12 @@ my $init_report_cmds = sub {
 		'cat /etc/pve/datacenter.cfg',
 	    ],
 	},
+	jobs => {
+	    order => 65,
+	    cmds => [
+		'cat /etc/pve/jobs.cfg',
+	    ],
+	},
 	hardware => {
 	    order => 70,
 	    cmds => [
@@ -108,7 +120,7 @@ my $init_report_cmds = sub {
 	'block devices' => {
 	    order => 80,
 	    cmds => [
-		'lsblk --ascii -M -o +HOTPLUG,ROTA,PHY-SEC,FSTYPE,MODEL,TRAN',
+		'lsblk --ascii -M -o +HOTPLUG,ROTA,PHY-SEC,FSTYPE,MODEL,TRAN,WWN',
 		'ls -l /dev/disk/by-*/',
 		'iscsiadm -m node',
 		'iscsiadm -m session',

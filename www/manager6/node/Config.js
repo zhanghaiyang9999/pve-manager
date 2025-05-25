@@ -194,6 +194,9 @@ Ext.define('PVE.node.Config', {
 		    showApplyBtn: true,
 		    groups: ['services'],
 		    nodename: nodename,
+		    editOptions: {
+			enableBridgeVlanIds: true,
+		    },
 		    onlineHelp: 'sysadmin_network_configuration',
 		},
 		{
@@ -244,7 +247,7 @@ Ext.define('PVE.node.Config', {
 	if (caps.nodes['Sys.Syslog']) {
 	    me.items.push({
 		xtype: 'proxmoxJournalView',
-		title: 'Syslog',
+		title: gettext('System Log'),
 		iconCls: 'fa fa-list',
 		groups: ['services'],
 		disabled: !caps.nodes['Sys.Syslog'],
@@ -295,6 +298,7 @@ Ext.define('PVE.node.Config', {
 		    base_url: '/nodes/' + nodename + '/firewall/rules',
 		    list_refs_url: '/cluster/firewall/refs',
 		    itemId: 'firewall',
+		    firewall_type: 'node',
 		},
 		{
 		    xtype: 'pveFirewallOptions',

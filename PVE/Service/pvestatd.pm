@@ -15,6 +15,7 @@ use PVE::CpuSet;
 use Filesys::Df;
 use PVE::INotify;
 use PVE::Network;
+use PVE::NodeConfig;
 use PVE::Cluster qw(cfs_read_file);
 use PVE::Storage;
 use PVE::QemuServer;
@@ -31,6 +32,7 @@ use PVE::Ceph::Tools;
 use PVE::pvecfg;
 
 use PVE::ExtMetric;
+use PVE::PullMetric;
 use PVE::Status::Plugin;
 
 use base qw(PVE::Daemon);
@@ -103,7 +105,7 @@ sub update_supported_cpuflags {
 
 	$supported_cpuflags = {};
     } else {
-	# only set cached version if there's actually something to braodcast
+	# only set cached version if there's actually something to broadcast
 	$cached_kvm_version = $kvm_version;
     }
 
@@ -147,7 +149,7 @@ my sub broadcast_static_node_info {
 }
 
 sub update_node_status {
-    my ($status_cfg) = @_;
+    my ($status_cfg, $pull_txn) = @_;
 
     my ($uptime) = PVE::ProcFSTools::read_proc_uptime();
 
@@ -199,6 +201,8 @@ sub update_node_status {
     PVE::ExtMetric::update_all($transactions, 'node', $nodename, $node_metric, $ctime);
     PVE::ExtMetric::transactions_finish($transactions);
 
+    PVE::PullMetric::update($pull_txn, 'node', $node_metric, $ctime);
+
     broadcast_static_node_info($maxcpu, $meminfo->{memtotal});
 }
 
@@ -212,9 +216,12 @@ sub auto_balloning {
     #$hostmeminfo->{memtotal} = int(2*1024*1024*1024/0.8); # you can set this to test
     my $hostfreemem = $hostmeminfo->{memtotal} - $hostmeminfo->{memused};
 
-    # try to use ~80% host memory; goal is the change amount required to achieve that
-    my $goal = int($hostmeminfo->{memtotal} * 0.8 - $hostmeminfo->{memused});
-    $log->("host goal: $goal free: $hostfreemem total: $hostmeminfo->{memtotal}\n");
+    # try to keep host memory usage at a certain percentage (= target), default is 80%
+    my $config = PVE::NodeConfig::load_config($nodename);
+    my $target = int($config->{'ballooning-target'} // 80);
+    # goal is the change amount required to achieve that
+    my $goal = int($hostmeminfo->{memtotal} * $target / 100 - $hostmeminfo->{memused});
+    $log->("target: $target%% host goal: $goal free: $hostfreemem total: $hostmeminfo->{memtotal}\n");
 
     my $maxchange = 100*1024*1024;
     my $res = PVE::AutoBalloon::compute_alg1($vmstatus, $goal, $maxchange);
@@ -231,7 +238,7 @@ sub auto_balloning {
 }
 
 sub update_qemu_status {
-    my ($status_cfg) = @_;
+    my ($status_cfg, $pull_txn) = @_;
 
     my $ctime = time();
     my $vmstatus = PVE::QemuServer::vmstatus(undef, 1);
@@ -261,6 +268,8 @@ sub update_qemu_status {
     }
 
     PVE::ExtMetric::transactions_finish($transactions);
+
+    PVE::PullMetric::update($pull_txn, 'qemu', $vmstatus, $ctime);
 }
 
 sub remove_stale_lxc_consoles {
@@ -440,7 +449,7 @@ sub rebalance_lxc_containers {
 }
 
 sub update_lxc_status {
-    my ($status_cfg) = @_;
+    my ($status_cfg, $pull_txn) = @_;
 
     my $ctime = time();
     my $vmstatus = PVE::LXC::vmstatus();
@@ -469,10 +478,12 @@ sub update_lxc_status {
 	PVE::ExtMetric::update_all($transactions, 'lxc', $vmid, $d, $ctime, $nodename);
     }
     PVE::ExtMetric::transactions_finish($transactions);
+
+    PVE::PullMetric::update($pull_txn, 'lxc', $vmstatus, $ctime);
 }
 
 sub update_storage_status {
-    my ($status_cfg) = @_;
+    my ($status_cfg, $pull_txn) = @_;
 
     my $cfg = PVE::Storage::config();
     my $ctime = time();
@@ -492,6 +503,8 @@ sub update_storage_status {
 	PVE::ExtMetric::update_all($transactions, 'storage', $nodename, $storeid, $d, $ctime);
     }
     PVE::ExtMetric::transactions_finish($transactions);
+
+    PVE::PullMetric::update($pull_txn, 'storage', $info, $ctime);
 }
 
 sub rotate_authkeys {
@@ -532,6 +545,8 @@ sub update_status {
     # correct list in case of an unexpected crash.
     my $rpcenv = PVE::RPCEnvironment::get();
 
+    my $pull_txn = PVE::PullMetric::transaction_start();
+
     eval {
 	my $tlist = $rpcenv->active_workers();
 	PVE::Cluster::broadcast_tasklist($tlist);
@@ -542,19 +557,19 @@ sub update_status {
     my $status_cfg = PVE::Cluster::cfs_read_file('status.cfg');
 
     eval {
-	update_node_status($status_cfg);
+	update_node_status($status_cfg, $pull_txn);
     };
     $err = $@;
     syslog('err', "node status update error: $err") if $err;
 
     eval {
-	update_qemu_status($status_cfg);
+	update_qemu_status($status_cfg, $pull_txn);
     };
     $err = $@;
     syslog('err', "qemu status update error: $err") if $err;
 
     eval {
-	update_lxc_status($status_cfg);
+	update_lxc_status($status_cfg, $pull_txn);
     };
     $err = $@;
     syslog('err', "lxc status update error: $err") if $err;
@@ -566,7 +581,7 @@ sub update_status {
     syslog('err', "lxc cpuset rebalance error: $err") if $err;
 
     eval {
-	update_storage_status($status_cfg);
+	update_storage_status($status_cfg, $pull_txn);
     };
     $err = $@;
     syslog('err', "storage status update error: $err") if $err;
@@ -600,6 +615,12 @@ sub update_status {
     };
     $err = $@;
     syslog('err', "version info update error: $err") if $err;
+
+    eval {
+	PVE::PullMetric::transaction_finish($pull_txn);
+    };
+    $err = $@;
+    syslog('err', "could not populate metric data cache: $err") if $err;
 }
 
 my $next_update = 0;
@@ -676,8 +697,3 @@ our $cmddef = {
 };
 
 1;
-
-
-
-
-

@@ -1,10 +1,12 @@
 Ext.define('PVE.form.FWMacroSelector', {
     extend: 'Proxmox.form.ComboGrid',
     alias: 'widget.pveFWMacroSelector',
+
     allowBlank: true,
     autoSelect: false,
     valueField: 'macro',
     displayField: 'macro',
+
     listConfig: {
 	columns: [
 	    {
@@ -49,10 +51,12 @@ Ext.define('PVE.form.FWMacroSelector', {
 Ext.define('PVE.form.ICMPTypeSelector', {
     extend: 'Proxmox.form.ComboGrid',
     alias: 'widget.pveICMPTypeSelector',
+
     allowBlank: true,
     autoSelect: false,
     valueField: 'name',
     displayField: 'name',
+
     listConfig: {
 	columns: [
 	    {
@@ -147,12 +151,34 @@ let ICMPV6_TYPE_NAMES_STORE = Ext.create('Ext.data.Store', {
     ],
 });
 
+let DEFAULT_ALLOWED_DIRECTIONS = ['in', 'out'];
+
+let ALLOWED_DIRECTIONS = {
+    'dc': ['in', 'out', 'forward'],
+    'node': ['in', 'out', 'forward'],
+    'group': ['in', 'out', 'forward'],
+    'vm': ['in', 'out'],
+    'vnet': ['forward'],
+};
+
+let DEFAULT_ALLOWED_ACTIONS = ['ACCEPT', 'REJECT', 'DROP'];
+
+let ALLOWED_ACTIONS = {
+    'in': ['ACCEPT', 'REJECT', 'DROP'],
+    'out': ['ACCEPT', 'REJECT', 'DROP'],
+    'forward': ['ACCEPT', 'DROP'],
+};
+
 Ext.define('PVE.FirewallRulePanel', {
     extend: 'Proxmox.panel.InputPanel',
 
     allow_iface: false,
 
     list_refs_url: undefined,
+
+    firewall_type: undefined,
+    action_selector: undefined,
+    forward_warning: undefined,
 
     onGetValues: function(values) {
 	var me = this;
@@ -171,12 +197,52 @@ Ext.define('PVE.FirewallRulePanel', {
 	return values;
     },
 
+    setValidActions: function(type) {
+	let me = this;
+
+	let allowed_actions = ALLOWED_ACTIONS[type] ?? DEFAULT_ALLOWED_ACTIONS;
+	me.action_selector.setComboItems(allowed_actions.map((action) => [action, action]));
+    },
+
+    setForwardWarning: function(type) {
+	let me = this;
+	me.forward_warning.setHidden(type !== 'forward');
+    },
+
+    onSetValues: function(values) {
+	let me = this;
+
+	if (values.type) {
+	    me.setValidActions(values.type);
+	    me.setForwardWarning(values.type);
+	}
+
+	return values;
+    },
+
     initComponent: function() {
 	var me = this;
 
 	if (!me.list_refs_url) {
 	    throw "no list_refs_url specified";
 	}
+
+	let allowed_directions = ALLOWED_DIRECTIONS[me.firewall_type] ?? DEFAULT_ALLOWED_DIRECTIONS;
+
+	me.action_selector = Ext.create('Proxmox.form.KVComboBox', {
+	    xtype: 'proxmoxKVComboBox',
+	    name: 'action',
+	    value: 'ACCEPT',
+	    comboItems: DEFAULT_ALLOWED_ACTIONS.map((action) => [action, action]),
+	    fieldLabel: gettext('Action'),
+	    allowBlank: false,
+	});
+
+	me.forward_warning = Ext.create('Proxmox.form.field.DisplayEdit', {
+	    userCls: 'pmx-hint',
+	    value: gettext('Forward rules only take effect when the nftables firewall is activated in the host options'),
+	    hidden: true,
+	});
 
 	me.column1 = [
 	    {
@@ -190,19 +256,18 @@ Ext.define('PVE.FirewallRulePanel', {
 	    {
 		xtype: 'proxmoxKVComboBox',
 		name: 'type',
-		value: 'in',
-		comboItems: [['in', 'in'], ['out', 'out']],
+		value: allowed_directions[0],
+		comboItems: allowed_directions.map((dir) => [dir, dir]),
 		fieldLabel: gettext('Direction'),
 		allowBlank: false,
+		listeners: {
+		    change: function(f, value) {
+			me.setValidActions(value);
+			me.setForwardWarning(value);
+                    },
+                },
 	    },
-	    {
-		xtype: 'proxmoxKVComboBox',
-		name: 'action',
-		value: 'ACCEPT',
-		comboItems: [['ACCEPT', 'ACCEPT'], ['DROP', 'DROP'], ['REJECT', 'REJECT']],
-		fieldLabel: gettext('Action'),
-		allowBlank: false,
-	    },
+	    me.action_selector,
         ];
 
 	if (me.allow_iface) {
@@ -373,9 +438,17 @@ Ext.define('PVE.FirewallRulePanel', {
 		value: '',
 		fieldLabel: gettext('Comment'),
 	    },
+	    me.forward_warning,
 	];
 
 	me.callParent();
+
+	if (me.isCreate) {
+	    // on create we never change the values, so we need to trigger this
+	    // manually
+	    me.setValidActions(me.getValues().type);
+	    me.setForwardWarning(me.getValues().type);
+	}
     },
 });
 
@@ -386,6 +459,8 @@ Ext.define('PVE.FirewallRuleEdit', {
     list_refs_url: undefined,
 
     allow_iface: false,
+
+    firewall_type: undefined,
 
     initComponent: function() {
 	var me = this;
@@ -412,6 +487,7 @@ Ext.define('PVE.FirewallRuleEdit', {
 	    list_refs_url: me.list_refs_url,
 	    allow_iface: me.allow_iface,
 	    rule_pos: me.rule_pos,
+	    firewall_type: me.firewall_type,
 	});
 
 	Ext.apply(me, {
@@ -538,6 +614,7 @@ Ext.define('PVE.FirewallRules', {
     alias: 'widget.pveFirewallRules',
 
     onlineHelp: 'chapter_pve_firewall',
+    emptyText: gettext('No firewall rule configured here.'),
 
     stateful: true,
     stateId: 'grid-firewall-rules',
@@ -554,6 +631,8 @@ Ext.define('PVE.FirewallRules', {
 
     allow_groups: true,
     allow_iface: false,
+
+    firewall_type: undefined,
 
     setBaseUrl: function(url) {
         var me = this;
@@ -661,7 +740,7 @@ Ext.define('PVE.FirewallRules', {
 	    var type = rec.data.type;
 
 	    var editor;
-	    if (type === 'in' || type === 'out') {
+	    if (type === 'in' || type === 'out' || type === 'forward') {
 		editor = 'PVE.FirewallRuleEdit';
 	    } else if (type === 'group') {
 		editor = 'PVE.FirewallGroupRuleEdit';
@@ -670,6 +749,7 @@ Ext.define('PVE.FirewallRules', {
 	    }
 
 	    var win = Ext.create(editor, {
+		firewall_type: me.firewall_type,
 		digest: rec.data.digest,
 		allow_iface: me.allow_iface,
 		base_url: me.base_url,
@@ -694,6 +774,7 @@ Ext.define('PVE.FirewallRules', {
 	    disabled: true,
 	    handler: function() {
 		var win = Ext.create('PVE.FirewallRuleEdit', {
+		    firewall_type: me.firewall_type,
 		    allow_iface: me.allow_iface,
 		    base_url: me.base_url,
 		    list_refs_url: me.list_refs_url,
@@ -709,11 +790,12 @@ Ext.define('PVE.FirewallRules', {
 		return;
 	    }
 	    let type = rec.data.type;
-	    if (!(type === 'in' || type === 'out')) {
+	    if (!(type === 'in' || type === 'out' || type === 'forward')) {
 		return;
 	    }
 
 	    let win = Ext.create('PVE.FirewallRuleEdit', {
+		firewall_type: me.firewall_type,
 		allow_iface: me.allow_iface,
 		base_url: me.base_url,
 		list_refs_url: me.list_refs_url,
@@ -726,7 +808,7 @@ Ext.define('PVE.FirewallRules', {
 	me.copyBtn = Ext.create('Proxmox.button.Button', {
 	    text: gettext('Copy'),
 	    selModel: sm,
-	    enableFn: ({ data }) => (data.type === 'in' || data.type === 'out') && me.canEdit,
+	    enableFn: ({ data }) => (data.type === 'in' || data.type === 'out' || data.type === 'forward') && me.canEdit,
 	    disabled: true,
 	    handler: run_copy_editor,
 	});
@@ -773,10 +855,10 @@ Ext.define('PVE.FirewallRules', {
 	    let errors = record.data.errors;
 	    if (errors && errors[name]) {
 		metaData.tdCls = 'proxmox-invalid-row';
-		let html = '<p>' + Ext.htmlEncode(errors[name]) + '</p>';
+		let html = Ext.htmlEncode(`<p>${Ext.htmlEncode(errors[name])}`);
 		metaData.tdAttr = 'data-qwidth=600 data-qtitle="ERROR" data-qtip="' + html + '"';
 	    }
-	    return value;
+	    return Ext.htmlEncode(value);
 	};
 
 	let columns = [
@@ -919,9 +1001,9 @@ Ext.define('PVE.FirewallRules', {
 		flex: 10,
 		minWidth: 75,
 		renderer: function(value, metaData, record) {
-		    let comment = render_errors('comment', Ext.util.Format.htmlEncode(value), metaData, record) || '';
+		    let comment = render_errors('comment', value, metaData, record) || '';
 		    if (comment.length * 12 > metaData.column.cellWidth) {
-			comment = `<span data-qtip="${comment}">${comment}</span>`;
+			comment = `<span data-qtip="${Ext.htmlEncode(comment)}">${comment}</span>`;
 		    }
 		    return comment;
 		},

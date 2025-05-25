@@ -27,6 +27,17 @@ use PVE::VZDump::Plugin;
 use PVE::Tools qw(extract_param split_list);
 use PVE::API2Tools;
 
+# section config header/ID, this needs to cover UUIDs, user given values
+# and `$digest:$counter` values converted from vzdump.cron
+# TODO move to a better place once cycle
+# Jobs::VZDump -> API2::VZDump -> API2::Backups -> Jobs::VZDump is broken..
+PVE::JSONSchema::register_standard_option('pve-backup-jobid', {
+    type => 'string',
+    description => "The job ID.",
+    maxLength => 50,
+    pattern => '\S+',
+});
+
 my @posix_filesystems = qw(ext3 ext4 nfs nfs4 reiserfs xfs);
 
 my $lockfile = '/var/run/vzdump.lock';
@@ -130,13 +141,37 @@ my $generate_notes = sub {
     return $notes_template;
 };
 
+sub parse_fleecing {
+    my ($param) = @_;
+
+    if (defined(my $fleecing = $param->{fleecing})) {
+	return $fleecing if ref($fleecing) eq 'HASH'; # already parsed
+	$param->{fleecing} = PVE::JSONSchema::parse_property_string('backup-fleecing', $fleecing);
+    }
+
+    return $param->{fleecing};
+}
+
 my sub parse_performance {
     my ($param) = @_;
 
     if (defined(my $perf = $param->{performance})) {
-	return if ref($perf) eq 'HASH'; # already parsed
+	return $perf if ref($perf) eq 'HASH'; # already parsed
 	$param->{performance} = PVE::JSONSchema::parse_property_string('backup-performance', $perf);
     }
+
+    return $param->{performance};
+}
+
+my sub merge_performance {
+    my ($prefer, $fallback) = @_;
+
+    my $res = {};
+    for my $opt (keys PVE::JSONSchema::get_format('backup-performance')->%*) {
+	$res->{$opt} = $prefer->{$opt} // $fallback->{$opt}
+	    if defined($prefer->{$opt}) || defined($fallback->{$opt});
+    }
+    return $res;
 }
 
 my $parse_prune_backups_maxfiles = sub {
@@ -149,7 +184,7 @@ my $parse_prune_backups_maxfiles = sub {
         if defined($maxfiles) && defined($prune_backups);
 
     if (defined($prune_backups)) {
-	return if ref($prune_backups) eq 'HASH'; # already parsed
+	return $prune_backups if ref($prune_backups) eq 'HASH'; # already parsed
 	$param->{'prune-backups'} = PVE::JSONSchema::parse_property_string(
 	    'prune-backups',
 	    $prune_backups
@@ -161,6 +196,8 @@ my $parse_prune_backups_maxfiles = sub {
 	    $param->{'prune-backups'} = { 'keep-all' => 1 };
 	}
     }
+
+    return $param->{'prune-backups'};
 };
 
 sub storage_info {
@@ -180,7 +217,10 @@ sub storage_info {
     $info->{'prune-backups'} = PVE::JSONSchema::parse_property_string('prune-backups', $scfg->{'prune-backups'})
 	if defined($scfg->{'prune-backups'});
 
-    if ($type eq 'pbs') {
+    if (PVE::Storage::storage_has_feature($cfg, $storage, 'backup-provider')) {
+	$info->{'backup-provider'} =
+	    PVE::Storage::new_backup_provider($cfg, $storage, sub { debugmsg($_[0], $_[1]); });
+    } elsif ($type eq 'pbs') {
 	$info->{pbs} = 1;
     } else {
 	$info->{dumpdir} = PVE::Storage::get_backup_dir($cfg, $storage);
@@ -277,8 +317,21 @@ sub read_vzdump_defaults {
 	     defined($default) ? ($_ => $default) : ()
 	} keys %$confdesc_for_defaults
     };
+    my $performance_fmt = PVE::JSONSchema::get_format('backup-performance');
+    $defaults->{performance} = {
+	map {
+	    my $default = $performance_fmt->{$_}->{default};
+	    defined($default) ? ($_ => $default) : ()
+	} keys $performance_fmt->%*
+    };
+    my $fleecing_fmt = PVE::JSONSchema::get_format('backup-fleecing');
+    $defaults->{fleecing} = {
+	map {
+	    my $default = $fleecing_fmt->{$_}->{default};
+	    defined($default) ? ($_ => $default) : ()
+	} keys $fleecing_fmt->%*
+    };
     $parse_prune_backups_maxfiles->($defaults, "defaults in VZDump schema");
-    parse_performance($defaults);
 
     my $raw;
     eval { $raw = PVE::Tools::file_get_contents($fn); };
@@ -304,10 +357,15 @@ sub read_vzdump_defaults {
 	$res->{mailto} = [ @mailto ];
     }
     $parse_prune_backups_maxfiles->($res, "options in '$fn'");
+    parse_fleecing($res);
     parse_performance($res);
 
-    foreach my $key (keys %$defaults) {
-	$res->{$key} = $defaults->{$key} if !defined($res->{$key});
+    for my $key (keys $defaults->%*) {
+	if (!defined($res->{$key})) {
+	    $res->{$key} = $defaults->{$key};
+	} elsif ($key eq 'performance') {
+	    $res->{$key} = merge_performance($res->{$key}, $defaults->{$key});
+	}
     }
 
     if (defined($res->{storage}) && defined($res->{dumpdir})) {
@@ -433,26 +491,13 @@ my sub get_hostname {
     return $hostname;
 }
 
-my $subject_template = "vzdump backup status ({{hostname}}): {{status-text}}";
-
-my $body_template = <<EOT;
-{{error-message}}
-{{heading-1 "Details"}}
-{{table guest-table}}
-{{#verbatim}}
-Total running time: {{duration total-time}}
-Total size: {{human-bytes total-size}}
-{{/verbatim}}
-{{heading-1 "Logs"}}
-{{verbatim-monospaced logs}}
-EOT
-
 use constant MAX_LOG_SIZE => 1024*1024;
 
 sub send_notification {
     my ($self, $tasklist, $total_time, $err, $detail_pre, $detail_post) = @_;
 
     my $opts = $self->{opts};
+    my $job_id = $opts->{'job-id'};
     my $mailto = $opts->{mailto};
     my $cmdline = $self->{cmdline};
     my $policy = $opts->{mailnotification} // 'always';
@@ -486,25 +531,21 @@ sub send_notification {
 	    "See Task History for details!\n";
     };
 
-    my $hostname = get_hostname();
-
-    my $notification_props = {
-	"hostname" => $hostname,
-	"error-message" => $err,
-	"guest-table" => build_guest_table($tasklist),
-	"logs" => $text_log_part,
-	"status-text" => $status_text,
-	"total-time" => $total_time,
-	"total-size" => $total_size,
-    };
+    my $template_data = PVE::Notify::common_template_data();
+    $template_data->{error} = $err;
+    $template_data->{"guest-table"} = build_guest_table($tasklist);
+    $template_data->{logs} = $text_log_part;
+    $template_data->{"status-text"} = $status_text;
+    $template_data->{"total-size"} = $total_size;
+    $template_data->{"total-time"} = $total_time;
 
     my $fields = {
-	# TODO: There is no straight-forward way yet to get the
-	# backup job id here... (I think pvescheduler would need
-	# to pass that to the vzdump call?)
 	type => "vzdump",
-	hostname => $hostname,
+	# Hostname (without domain part)
+	hostname => PVE::INotify::nodename(),
     };
+    # Add backup-job metadata field in case this is a backup job.
+    $fields->{'job-id'} = $job_id if $job_id;
 
     my $severity = $failed ? "error" : "info";
     my $email_configured = $mailto && scalar(@$mailto);
@@ -544,9 +585,8 @@ sub send_notification {
 
 	    PVE::Notify::notify(
 		$severity,
-		$subject_template,
-		$body_template,
-		$notification_props,
+		"vzdump",
+		$template_data,
 		$fields,
 		$notification_config
 	    );
@@ -556,9 +596,8 @@ sub send_notification {
 	# no email addresses were configured.
 	PVE::Notify::notify(
 	    $severity,
-	    $subject_template,
-	    $body_template,
-	    $notification_props,
+	    "vzdump",
+	    $template_data,
 	    $fields,
 	);
     }
@@ -592,8 +631,10 @@ sub new {
 	if ($k eq 'dumpdir' || $k eq 'storage') {
 	    $opts->{$k} = $defaults->{$k} if !defined ($opts->{dumpdir}) &&
 		!defined ($opts->{storage});
-	} else {
-	    $opts->{$k} = $defaults->{$k} if !defined ($opts->{$k});
+	} elsif (!defined($opts->{$k})) {
+	    $opts->{$k} = $defaults->{$k};
+	} elsif ($k eq 'performance') {
+	    $opts->{$k} = merge_performance($opts->{$k}, $defaults->{$k});
 	}
     }
 
@@ -676,6 +717,7 @@ sub new {
 	    $opts->{scfg} = $info->{scfg};
 	    $opts->{pbs} = $info->{pbs};
 	    $opts->{'prune-backups'} //= $info->{'prune-backups'};
+	    $self->{'backup-provider'} = $info->{'backup-provider'} if $info->{'backup-provider'};
 	}
     } elsif ($opts->{dumpdir}) {
 	$add_error->("dumpdir '$opts->{dumpdir}' does not exist")
@@ -960,7 +1002,7 @@ sub exec_backup_task {
 	    }
 	}
 
-	if (!$self->{opts}->{pbs}) {
+	if (!$self->{opts}->{pbs} && !$self->{'backup-provider'}) {
 	    $task->{logfile} = "$opts->{dumpdir}/$basename.log";
 	}
 
@@ -970,7 +1012,10 @@ sub exec_backup_task {
 	    $ext .= ".${comp_ext}";
 	}
 
-	if ($self->{opts}->{pbs}) {
+	if ($self->{'backup-provider'}) {
+	    die "unable to pipe backup to stdout\n" if $opts->{stdout};
+	    # the archive name $task->{target} is returned by the start hook a bit later
+	} elsif ($self->{opts}->{pbs}) {
 	    die "unable to pipe backup to stdout\n" if $opts->{stdout};
 	    $task->{target} = $pbs_snapshot_name;
 	} else {
@@ -988,7 +1033,7 @@ sub exec_backup_task {
 	my $pid = $$;
 	if ($opts->{tmpdir}) {
 	    $task->{tmpdir} = "$opts->{tmpdir}/vzdumptmp${pid}_$vmid/";
-	} elsif ($self->{opts}->{pbs}) {
+	} elsif ($self->{opts}->{pbs} || $self->{'backup-provider'}) {
 	    $task->{tmpdir} = "/var/tmp/vzdumptmp${pid}_$vmid";
 	} else {
 	    # dumpdir is posix? then use it as temporary dir
@@ -1054,12 +1099,26 @@ sub exec_backup_task {
 	$task->{mode} = $mode;
 
    	debugmsg ('info', "backup mode: $mode", $logfd);
-	debugmsg ('info', "bandwidth limit: $opts->{bwlimit} KB/s", $logfd)  if $opts->{bwlimit};
+	debugmsg ('info', "bandwidth limit: $opts->{bwlimit} KiB/s", $logfd)  if $opts->{bwlimit};
 	debugmsg ('info', "ionice priority: $opts->{ionice}", $logfd);
+
+	my $backup_provider_init = sub {
+	    my $init_result =
+		$self->{'backup-provider'}->backup_init($vmid, $vmtype, $task->{backup_time});
+	    die "backup init failed: did not receive a valid result from the backup provider\n"
+		if !defined($init_result) || ref($init_result) ne 'HASH';
+	    my $archive_name = $init_result->{'archive-name'};
+	    die "backup init failed: did not receive an archive name from backup provider\n"
+		if !defined($archive_name) || length($archive_name) == 0;
+	    die "backup init failed: illegal characters in archive name '$archive_name'\n"
+		if $archive_name !~ m!^(${PVE::Storage::SAFE_CHAR_CLASS_RE}|/|:)+$!;
+	    $task->{target} = $archive_name;
+	};
 
 	if ($mode eq 'stop') {
 	    $plugin->prepare ($task, $vmid, $mode);
 
+	    $backup_provider_init->() if $self->{'backup-provider'};
 	    $self->run_hook_script ('backup-start', $task, $logfd);
 
 	    if ($running) {
@@ -1074,6 +1133,7 @@ sub exec_backup_task {
 	} elsif ($mode eq 'suspend') {
 	    $plugin->prepare ($task, $vmid, $mode);
 
+	    $backup_provider_init->() if $self->{'backup-provider'};
 	    $self->run_hook_script ('backup-start', $task, $logfd);
 
 	    if ($vmtype eq 'lxc') {
@@ -1100,6 +1160,7 @@ sub exec_backup_task {
 	    }
 
 	} elsif ($mode eq 'snapshot') {
+	    $backup_provider_init->() if $self->{'backup-provider'};
 	    $self->run_hook_script ('backup-start', $task, $logfd);
 
 	    my $snapshot_count = $task->{snapshot_count} || 0;
@@ -1142,11 +1203,13 @@ sub exec_backup_task {
 	    return;
 	}
 
-	my $archive_txt = $self->{opts}->{pbs} ? 'Proxmox Backup Server' : 'vzdump';
+	my $archive_txt = 'vzdump';
+	$archive_txt = 'Proxmox Backup Server' if $self->{opts}->{pbs};
+	$archive_txt = $self->{'backup-provider'}->provider_name() if $self->{'backup-provider'};
 	debugmsg('info', "creating $archive_txt archive '$task->{target}'", $logfd);
 	$plugin->archive($task, $vmid, $task->{tmptar}, $comp);
 
-	if ($self->{opts}->{pbs}) {
+	if ($self->{'backup-provider'} || $self->{opts}->{pbs}) {
 	    # size is added to task struct in guest vzdump plugins
 	} else {
 	    rename ($task->{tmptar}, $task->{target}) ||
@@ -1160,7 +1223,8 @@ sub exec_backup_task {
 
 	# Mark as protected before pruning.
 	if (my $storeid = $opts->{storage}) {
-	    my $volname = $opts->{pbs} ? $task->{target} : basename($task->{target});
+	    my $volname = $opts->{pbs} || $self->{'backup-provider'} ? $task->{target}
+	                                                             : basename($task->{target});
 	    my $volid = "${storeid}:backup/${volname}";
 
 	    if ($opts->{'notes-template'} && $opts->{'notes-template'} ne '') {
@@ -1213,6 +1277,10 @@ sub exec_backup_task {
 	    debugmsg ('info', "pruned $pruned backup(s)${log_pruned_extra}", $logfd);
 	}
 
+	if ($self->{'backup-provider'}) {
+	    my $cleanup_result = $self->{'backup-provider'}->backup_cleanup($vmid, $vmtype, 1, {});
+	    $task->{size} = $cleanup_result->{stats}->{'archive-size'};
+	}
 	$self->run_hook_script ('backup-end', $task, $logfd);
     };
     my $err = $@;
@@ -1272,7 +1340,16 @@ sub exec_backup_task {
 	debugmsg ('err', "Backup of VM $vmid failed - $err", $logfd, 1);
 	debugmsg ('info', "Failed at " . strftime("%F %H:%M:%S", localtime()));
 
+	if ($self->{'backup-provider'}) {
+	    eval {
+		$self->{'backup-provider'}->backup_cleanup(
+		    $vmid, $task->{vmtype}, 0, { error => $err });
+	    };
+	    debugmsg('warn', "backup cleanup for external provider failed - $@") if $@;
+	}
+
 	eval { $self->run_hook_script ('backup-abort', $task, $logfd); };
+	debugmsg('warn', $@) if $@; # message already contains command with phase name
 
     } else {
 	$task->{state} = 'ok';
@@ -1298,12 +1375,15 @@ sub exec_backup_task {
 		};
 		debugmsg('warn', "$@") if $@; # $@ contains already error prefix
 	    }
+	} elsif ($self->{'backup-provider'}) {
+	    $self->{'backup-provider'}->backup_handle_log_file($vmid, $task->{tmplog});
 	} elsif ($task->{logfile}) {
 	    system {'cp'} 'cp', $task->{tmplog}, $task->{logfile};
 	}
     }
 
     eval { $self->run_hook_script ('log-end', $task); };
+    debugmsg('warn', $@) if $@; # message already contains command with phase name
 
     die $err if $err && $err =~ m/^interrupted by signal$/;
 }
@@ -1355,6 +1435,7 @@ sub exec_backup {
     my $errcount = 0;
     eval {
 
+	$self->{'backup-provider'}->job_init($starttime) if $self->{'backup-provider'};
 	$self->run_hook_script ('job-start', undef, $job_start_fd);
 
 	foreach my $task (@$tasklist) {
@@ -1362,11 +1443,17 @@ sub exec_backup {
 	    $errcount += 1 if $task->{state} ne 'ok';
 	}
 
+	$self->{'backup-provider'}->job_cleanup() if $self->{'backup-provider'};
 	$self->run_hook_script ('job-end', undef, $job_end_fd);
     };
     my $err = $@;
 
     if ($err) {
+	if ($self->{'backup-provider'}) {
+	    eval { $self->{'backup-provider'}->job_cleanup(); };
+	    $err .= "job cleanup for external provider failed - $@" if $@;
+	}
+
 	eval { $self->run_hook_script ('job-abort', undef, $job_end_fd); };
 	$err .= $@ if $@;
 	debugmsg ('err', "Backup job failed - $err", undef, 1);
@@ -1453,6 +1540,7 @@ sub verify_vzdump_parameters {
 	if defined($param->{'prune-backups'}) && defined($param->{maxfiles});
 
     $parse_prune_backups_maxfiles->($param, 'CLI parameters');
+    parse_fleecing($param);
     parse_performance($param);
 
     if (my $template = $param->{'notes-template'}) {

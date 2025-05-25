@@ -22,7 +22,7 @@ Ext.define('PVE.lxc.CmdMenu', {
 	    });
 	};
 	let confirmedVMCommand = (cmd, params) => {
-	    let msg = Proxmox.Utils.format_task_description(`vz${cmd}`, info.vmid);
+	    let msg = PVE.Utils.formatGuestTaskConfirmation(`vz${cmd}`, info.vmid, info.name);
 	    Ext.Msg.confirm(gettext('Confirm'), msg, btn => {
 		if (btn === 'yes') {
 		    vm_command(cmd, params);
@@ -66,7 +66,13 @@ Ext.define('PVE.lxc.CmdMenu', {
 		iconCls: 'fa fa-fw fa-stop',
 		disabled: stopped,
 		tooltip: Ext.String.format(gettext('Stop {0} immediately'), 'CT'),
-		handler: () => confirmedVMCommand('stop'),
+		handler: () => {
+		    Ext.create('PVE.GuestStop', {
+			nodename: info.node,
+			vm: info,
+			autoShow: true,
+		    });
+		},
 	    },
 	    {
 		text: gettext('Reboot'),
@@ -83,7 +89,13 @@ Ext.define('PVE.lxc.CmdMenu', {
 		text: gettext('Clone'),
 		iconCls: 'fa fa-fw fa-clone',
 		hidden: !caps.vms['VM.Clone'],
-		handler: () => PVE.window.Clone.wrap(info.node, info.vmid, me.isTemplate, 'lxc'),
+		handler: () => PVE.window.Clone.wrap(
+		    info.node,
+		    info.vmid,
+		    info.name,
+		    me.isTemplate,
+		    'lxc',
+		),
 	    },
 	    {
 		text: gettext('Migrate'),
@@ -94,6 +106,7 @@ Ext.define('PVE.lxc.CmdMenu', {
 			vmtype: 'lxc',
 			nodename: info.node,
 			vmid: info.vmid,
+			vmname: info.name,
 			autoShow: true,
 		    });
 		},
@@ -102,7 +115,7 @@ Ext.define('PVE.lxc.CmdMenu', {
 		text: gettext('Convert to template'),
 		iconCls: 'fa fa-fw fa-file-o',
 		handler: function() {
-		    let msg = Proxmox.Utils.format_task_description('vztemplate', info.vmid);
+		    let msg = PVE.Utils.formatGuestTaskConfirmation('vztemplate', info.vmid, info.name);
 		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
 			if (btn === 'yes') {
 			    Proxmox.Utils.API2Request({

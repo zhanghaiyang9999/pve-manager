@@ -16,7 +16,7 @@ Ext.define('PVE.window.PCIMapEditWindow', {
 	me.isCreate = (!me.name || !me.nodename) && !me.entryOnly;
 	me.method = me.name ? 'PUT' : 'POST';
 	me.hideMapping = !!me.entryOnly;
-	me.hideComment = me.name && !me.entryOnly;
+	me.globalEdit = !me.name || me.entryOnly;
 	me.hideNodeSelector = me.nodename || me.entryOnly;
 	me.hideNode = !me.nodename || !me.hideNodeSelector;
 	return {
@@ -126,8 +126,10 @@ Ext.define('PVE.window.PCIMapEditWindow', {
 	    this.lookup('pciselector').setMdev(value);
 	},
 
-	nodeChange: function(_field, value) {
-	    this.lookup('pciselector').setNodename(value);
+	nodeChange: function(field, value) {
+	    if (!field.isDisabled()) {
+		this.lookup('pciselector').setNodename(value);
+	    }
 	},
 
 	pciChange: function(_field, value) {
@@ -239,7 +241,19 @@ Ext.define('PVE.window.PCIMapEditWindow', {
 		    name: 'mdev',
 		    cbind: {
 			deleteEmpty: '{!isCreate}',
-			disabled: '{hideComment}',
+			disabled: '{!globalEdit}',
+		    },
+		},
+		{
+		    xtype: 'proxmoxcheckbox',
+		    fieldLabel: gettext('Live Migration Capable'),
+		    labelWidth: 200,
+		    boxLabel: `<i class="fa fa-exclamation-triangle warning"></i> ${gettext('Experimental')}`,
+		    reference: 'live-migration-capable',
+		    name: 'live-migration-capable',
+		    cbind: {
+			deleteEmpty: '{!isCreate}',
+			disabled: '{!globalEdit}',
 		    },
 		},
 	    ],
@@ -269,8 +283,8 @@ Ext.define('PVE.window.PCIMapEditWindow', {
 		    name: 'description',
 		    cbind: {
 			deleteEmpty: '{!isCreate}',
-			disabled: '{hideComment}',
-			hidden: '{hideComment}',
+			disabled: '{!globalEdit}',
+			hidden: '{!globalEdit}',
 		    },
 		},
 	    ],

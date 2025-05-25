@@ -35,11 +35,11 @@ Ext.define('PVE.ceph.Install', {
 	    windowText: function(get) {
 		if (get('isInstalled')) {
 		    return `<p class="install-mask">
-		    ${Ext.String.format(gettext('{0} is not initialized.'), 'Ceph')}
+		    ${gettext('Ceph is not initialized.')}
 		    ${gettext('You need to create an initial config once.')}</p>`;
 		} else {
 		    return '<p class="install-mask">' +
-		    Ext.String.format(gettext('{0} is not installed on this node.'), 'Ceph') + '<br>' +
+		    gettext('Ceph is not installed on this node.') + '<br>' +
 		    gettext('Would you like to install it now?') + '</p>';
 		}
 	    },
@@ -66,12 +66,12 @@ Ext.define('PVE.ceph.Install', {
 	    },
 	    handler: function() {
 		let view = this.up('pveCephInstallWindow');
-		let wizzard = Ext.create('PVE.ceph.CephInstallWizard', {
+		let wizard = Ext.create('PVE.ceph.CephInstallWizard', {
 		    nodename: view.nodename,
 		});
-		wizzard.getViewModel().set('isInstalled', this.getViewModel().get('isInstalled'));
-		wizzard.show();
-		view.mon(wizzard, 'beforeClose', function() {
+		wizard.getViewModel().set('isInstalled', this.getViewModel().get('isInstalled'));
+		wizard.show();
+		view.mon(wizard, 'beforeClose', function() {
 		    view.fireEvent("cephInstallWindowClosed");
 		    view.close();
 		});

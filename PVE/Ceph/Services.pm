@@ -50,28 +50,26 @@ sub broadcast_ceph_services {
 sub broadcast_ceph_versions {
     my ($version, $buildcommit, $vers_parts) = PVE::Ceph::Tools::get_local_version(1);
 
-    if ($version) {
-	my $nodename = PVE::INotify::nodename();
-	my $old = PVE::Cluster::get_node_kv("ceph-versions", $nodename);
-	if (defined($old->{$nodename})) {
-	    $old = eval { decode_json($old->{$nodename}) };
-	    warn $@ if $@; # should not happen
-	    if (defined($old) && $old->{buildcommit} eq $buildcommit && $old->{version}->{str} eq $version) {
-		return; # up to date, nothing to do so avoid (not exactly cheap) broadcast
-	    }
-	}
-	# FIXME: remove with 8.0 (or 7.2, its not _that_ bad) - for backward compat only
-	PVE::Cluster::broadcast_node_kv("ceph-version", $version);
+    return undef if !$version;
 
-	my $node_versions = {
-	    version => {
-		str => $version,
-		parts => $vers_parts,
-	    },
-	    buildcommit => $buildcommit,
-	};
-	PVE::Cluster::broadcast_node_kv("ceph-versions", encode_json($node_versions));
+    my $nodename = PVE::INotify::nodename();
+    my $old_versions = PVE::Cluster::get_node_kv("ceph-versions", $nodename);
+    if (length(my $old_version_raw = $old_versions->{$nodename})) {
+	my $old = eval { decode_json($old_version_raw) };
+	warn "failed to parse ceph-versions '$old_version_raw' as JSON - $@" if $@; # should not happen
+	if (defined($old) && $old->{buildcommit} eq $buildcommit && $old->{version}->{str} eq $version) {
+	    return; # up to date, nothing to do so avoid (not exactly cheap) broadcast
+	}
     }
+
+    my $node_versions = {
+	version => {
+	    str => $version,
+	    parts => $vers_parts,
+	},
+	buildcommit => $buildcommit,
+    };
+    PVE::Cluster::broadcast_node_kv("ceph-versions", encode_json($node_versions));
 }
 
 sub get_ceph_versions {

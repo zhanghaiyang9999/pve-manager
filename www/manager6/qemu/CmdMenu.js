@@ -23,7 +23,7 @@ Ext.define('PVE.qemu.CmdMenu', {
 	};
 	let confirmedVMCommand = (cmd, params, confirmTask) => {
 	    let task = confirmTask || `qm${cmd}`;
-	    let msg = Proxmox.Utils.format_task_description(task, info.vmid);
+	    let msg = PVE.Utils.formatGuestTaskConfirmation(task, info.vmid, info.name);
 	    Ext.Msg.confirm(gettext('Confirm'), msg, btn => {
 		if (btn === 'yes') {
 		    vm_command(cmd, params);
@@ -93,7 +93,13 @@ Ext.define('PVE.qemu.CmdMenu', {
 		iconCls: 'fa fa-fw fa-stop',
 		disabled: stopped,
 		tooltip: Ext.String.format(gettext('Stop {0} immediately'), 'VM'),
-		handler: () => confirmedVMCommand('stop'),
+		handler: () => {
+		    Ext.create('PVE.GuestStop', {
+			nodename: info.node,
+			vm: info,
+			autoShow: true,
+		    });
+		},
 	    },
 	    {
 		text: gettext('Reboot'),
@@ -115,6 +121,7 @@ Ext.define('PVE.qemu.CmdMenu', {
 			vmtype: 'qemu',
 			nodename: info.node,
 			vmid: info.vmid,
+			vmname: info.name,
 			autoShow: true,
 		    });
 		},
@@ -123,14 +130,20 @@ Ext.define('PVE.qemu.CmdMenu', {
 		text: gettext('Clone'),
 		iconCls: 'fa fa-fw fa-clone',
 		hidden: !caps.vms['VM.Clone'],
-		handler: () => PVE.window.Clone.wrap(info.node, info.vmid, me.isTemplate, 'qemu'),
+		handler: () => PVE.window.Clone.wrap(
+		    info.node,
+		    info.vmid,
+		    info.name,
+		    me.isTemplate,
+		    'qemu',
+		),
 	    },
 	    {
 		text: gettext('Convert to template'),
 		iconCls: 'fa fa-fw fa-file-o',
 		hidden: !caps.vms['VM.Allocate'],
 		handler: function() {
-		    let msg = Proxmox.Utils.format_task_description('qmtemplate', info.vmid);
+		    let msg = PVE.Utils.formatGuestTaskConfirmation('qmtemplate', info.vmid, info.name);
 		    Ext.Msg.confirm(gettext('Confirm'), msg, btn => {
 			if (btn === 'yes') {
 			    Proxmox.Utils.API2Request({

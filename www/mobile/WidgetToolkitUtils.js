@@ -67,6 +67,7 @@ utilities: {
 
     language_map: { //language map is sorted alphabetically by iso 639-1
 	ar: `العربية - ${gettext("Arabic")}`,
+	bg: `Български - ${gettext("Bulgarian")}`,
 	ca: `Català - ${gettext("Catalan")}`,
 	da: `Dansk - ${gettext("Danish")}`,
 	de: `Deutsch - ${gettext("German")}`,
@@ -465,7 +466,7 @@ utilities: {
 		    } else if (response.status && response.statusText) {
 			msg = gettext('Connection error') + ' ' + response.status + ': ' + response.statusText;
 		    }
-		    response.htmlStatus = msg;
+		    response.htmlStatus = Ext.htmlEncode(msg);
 		    Ext.callback(callbackFn, options.scope, [options, false, response]);
 		    Ext.callback(failureFn, options.scope, [response, options]);
 		},
@@ -586,6 +587,15 @@ utilities: {
 	}
     },
 
+    overrideNotificationFieldName: function(extra) {
+	// do nothing, we don't have notification configuration in mobile ui
+    },
+
+    overrideNotificationFieldValue: function(extra) {
+	// do nothing, we don't have notification configuration in mobile ui
+    },
+
+
     format_task_description: function(type, id) {
 	let farray = Proxmox.Utils.task_desc_table[type];
 	let text;
@@ -676,7 +686,7 @@ utilities: {
 	let type = task.type || task.worker_type;
 	let id = task.id || task.worker_id;
 
-	return Proxmox.Utils.format_task_description(type, id);
+	return Ext.htmlEncode(Proxmox.Utils.format_task_description(type, id));
     },
 
     render_uptime: function(value) {

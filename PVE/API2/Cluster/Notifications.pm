@@ -79,9 +79,148 @@ __PACKAGE__->register_method ({
 	    { name => 'endpoints' },
 	    { name => 'matchers' },
 	    { name => 'targets' },
+	    { name => 'matcher-fields' },
+	    { name => 'matcher-field-values' },
 	];
 
 	return $result;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'get_matcher_fields',
+    path => 'matcher-fields',
+    method => 'GET',
+    description => 'Returns known notification metadata fields',
+    permissions => {
+	check => ['or',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['perm', '/mapping/notifications', ['Mapping.Audit']],
+	],
+    },
+    protected => 0,
+    parameters => {
+	additionalProperties => 0,
+	properties => {},
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => 'object',
+	    properties => {
+		name => {
+		    description => 'Name of the field.',
+		    type => 'string',
+		},
+	    },
+	},
+	links => [ { rel => 'child', href => '{name}' } ],
+    },
+    code => sub {
+	# TODO: Adapt this API handler once we have a 'notification registry'
+
+	my $result = [
+	    { name => 'type' },
+	    { name => 'hostname' },
+	    { name => 'job-id' },
+	];
+
+	return $result;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'get_matcher_field_values',
+    path => 'matcher-field-values',
+    method => 'GET',
+    description => 'Returns known notification metadata fields and their known values',
+    permissions => {
+	check => ['or',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['perm', '/mapping/notifications', ['Mapping.Audit']],
+	],
+    },
+    protected => 1,
+    parameters => {
+	additionalProperties => 0,
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => 'object',
+	    properties => {
+		'value' => {
+		    description => 'Notification metadata value known by the system.',
+		    type => 'string'
+		},
+		'comment' => {
+		    description => 'Additional comment for this value.',
+		    type => 'string',
+		    optional => 1,
+		},
+		'field' => {
+		    description => 'Field this value belongs to.',
+		    type => 'string',
+		},
+	    },
+	},
+    },
+    code => sub {
+	# TODO: Adapt this API handler once we have a 'notification registry'
+	my $rpcenv = PVE::RPCEnvironment::get();
+	my $user = $rpcenv->get_user();
+
+	my $values = [
+	    {
+		value => 'package-updates',
+		field => 'type',
+	    },
+	    {
+		value => 'fencing',
+		field => 'type',
+	    },
+	    {
+		value => 'replication',
+		field => 'type',
+	    },
+	    {
+		value => 'vzdump',
+		field => 'type',
+	    },
+	    {
+		value => 'system-mail',
+		field => 'type',
+	    },
+	];
+
+	# Here we need a manual permission check.
+	if ($rpcenv->check($user, "/", ["Sys.Audit"], 1)) {
+	    for my $backup_job (@{PVE::API2::Backup->index({})}) {
+		push @$values, {
+		    value => $backup_job->{id},
+		    comment => $backup_job->{comment},
+		    field => 'job-id'
+		};
+	    }
+	}
+	# The API call returns only returns jobs for which the user
+	# has adequate permissions.
+	for my $sync_job (@{PVE::API2::ReplicationConfig->index({})}) {
+	    push @$values, {
+		value => $sync_job->{id},
+		comment => $sync_job->{comment},
+		field => 'job-id'
+	    };
+	}
+
+	for my $node (@{PVE::Cluster::get_nodelist()}) {
+	    push @$values, {
+		value => $node,
+		field => 'hostname',
+	    }
+	}
+
+	return $values;
     }
 });
 
@@ -107,6 +246,8 @@ __PACKAGE__->register_method ({
 	my $result = [
 	    { name => 'gotify' },
 	    { name => 'sendmail' },
+	    { name => 'smtp' },
+	    { name => 'webhook' },
 	];
 
 	return $result;
@@ -143,7 +284,7 @@ __PACKAGE__->register_method ({
 		'type' => {
 		    description => 'Type of the target.',
 		    type  => 'string',
-		    enum => [qw(sendmail gotify)],
+		    enum => [qw(sendmail gotify smtp webhook)],
 		},
 		'comment' => {
 		    description => 'Comment',
@@ -169,39 +310,7 @@ __PACKAGE__->register_method ({
 	my $config = PVE::Notify::read_config();
 
 	my $targets = eval {
-	    my $result = [];
-
-	    for my $target (@{$config->get_sendmail_endpoints()}) {
-		push @$result, {
-		    name => $target->{name},
-		    comment => $target->{comment},
-		    type => 'sendmail',
-		    disable => $target->{disable},
-		    origin => $target->{origin},
-		};
-	    }
-
-	    for my $target (@{$config->get_gotify_endpoints()}) {
-		push @$result, {
-		    name => $target->{name},
-		    comment => $target->{comment},
-		    type => 'gotify',
-		    disable => $target->{disable},
-		    origin => $target->{origin},
-		};
-	    }
-
-	    for my $target (@{$config->get_smtp_endpoints()}) {
-		push @$result, {
-		    name => $target->{name},
-		    comment => $target->{comment},
-		    type => 'smtp',
-		    disable => $target->{disable},
-		    origin => $target->{origin},
-		};
-	    }
-
-	    $result
+	    $config->get_targets();
 	};
 
 	raise_api_error($@) if $@;
@@ -391,7 +500,13 @@ __PACKAGE__->register_method ({
     method => 'POST',
     description => 'Create a new sendmail endpoint',
     permissions => {
-	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
     },
     parameters => {
 	additionalProperties => 0,
@@ -439,7 +554,13 @@ __PACKAGE__->register_method ({
     method => 'PUT',
     description => 'Update existing sendmail endpoint',
     permissions => {
-	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
     },
     parameters => {
 	additionalProperties => 0,
@@ -655,7 +776,13 @@ __PACKAGE__->register_method ({
     method => 'POST',
     description => 'Create a new gotify endpoint',
     permissions => {
-	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
     },
     parameters => {
 	additionalProperties => 0,
@@ -699,7 +826,13 @@ __PACKAGE__->register_method ({
     method => 'PUT',
     description => 'Update existing gotify endpoint',
     permissions => {
-	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
     },
     parameters => {
 	additionalProperties => 0,
@@ -958,8 +1091,12 @@ __PACKAGE__->register_method ({
     method => 'POST',
     description => 'Create a new smtp endpoint',
     permissions => {
-	check => ['or',
+	check => ['and',
 	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
 	],
     },
     parameters => {
@@ -1018,8 +1155,12 @@ __PACKAGE__->register_method ({
     method => 'PUT',
     description => 'Update existing smtp endpoint',
     permissions => {
-	check => ['or',
+	check => ['and',
 	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
 	],
     },
     parameters => {
@@ -1121,6 +1262,278 @@ __PACKAGE__->register_method ({
 	};
 
 	raise_api_error($@) if ($@);
+	return;
+    }
+});
+
+my $webhook_properties = {
+    name => {
+	description => 'The name of the endpoint.',
+	type => 'string',
+	format => 'pve-configid',
+    },
+    url => {
+	description => 'Server URL',
+	type => 'string',
+    },
+    method => {
+	description => 'HTTP method',
+	type => 'string',
+	enum => [qw(post put get)],
+    },
+    header => {
+	description => 'HTTP headers to set. These have to be formatted as'
+	  . ' a property string in the format name=<name>,value=<base64 of value>',
+	type => 'array',
+	items => {
+	    type => 'string',
+	},
+	optional => 1,
+    },
+    body => {
+	description => 'HTTP body, base64 encoded',
+	type => 'string',
+	optional => 1,
+    },
+    secret => {
+	description => 'Secrets to set. These have to be formatted as'
+	  . ' a property string in the format name=<name>,value=<base64 of value>',
+	type => 'array',
+	items => {
+	    type => 'string',
+	},
+	optional => 1,
+    },
+    comment => {
+	description => 'Comment',
+	type => 'string',
+	optional => 1,
+    },
+    disable => {
+	description => 'Disable this target',
+	type => 'boolean',
+	optional => 1,
+	default => 0,
+    },
+};
+
+__PACKAGE__->register_method ({
+    name => 'get_webhook_endpoints',
+    path => 'endpoints/webhook',
+    method => 'GET',
+    description => 'Returns a list of all webhook endpoints',
+    protected => 1,
+    permissions => {
+	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	check => ['perm', '/mapping/notifications', ['Mapping.Audit']],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => {},
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => 'object',
+	    properties => {
+		%$webhook_properties,
+		'origin' => {
+		    description => 'Show if this entry was created by a user or was built-in',
+		    type  => 'string',
+		    enum => [qw(user-created builtin modified-builtin)],
+		},
+	    },
+	},
+	links => [ { rel => 'child', href => '{name}' } ],
+    },
+    code => sub {
+	my $config = PVE::Notify::read_config();
+	my $rpcenv = PVE::RPCEnvironment::get();
+
+	my $entities = eval {
+	    $config->get_webhook_endpoints();
+	};
+	raise_api_error($@) if $@;
+
+	return $entities;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'get_webhook_endpoint',
+    path => 'endpoints/webhook/{name}',
+    method => 'GET',
+    description => 'Return a specific webhook endpoint',
+    protected => 1,
+    permissions => {
+	check => ['or',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['perm', '/mapping/notifications', ['Mapping.Audit']],
+	],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => {
+	    name => {
+		type => 'string',
+		format => 'pve-configid',
+		description => 'Name of the endpoint.'
+	    },
+	}
+    },
+    returns => {
+	type => 'object',
+	properties => {
+	    %$webhook_properties,
+	    digest => get_standard_option('pve-config-digest'),
+	}
+    },
+    code => sub {
+	my ($param) = @_;
+	my $name = extract_param($param, 'name');
+
+	my $config = PVE::Notify::read_config();
+	my $endpoint = eval {
+	    $config->get_webhook_endpoint($name)
+	};
+
+	raise_api_error($@) if $@;
+	$endpoint->{digest} = $config->digest();
+
+	return $endpoint;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'create_webhook_endpoint',
+    path => 'endpoints/webhook',
+    protected => 1,
+    method => 'POST',
+    description => 'Create a new webhook endpoint',
+    permissions => {
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => $webhook_properties,
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+	eval {
+	    PVE::Notify::lock_config(sub {
+		my $config = PVE::Notify::read_config();
+
+		$config->add_webhook_endpoint(
+		    $param,
+		);
+
+		PVE::Notify::write_config($config);
+	    });
+	};
+
+	raise_api_error($@) if $@;
+	return;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'update_webhook_endpoint',
+    path => 'endpoints/webhook/{name}',
+    protected => 1,
+    method => 'PUT',
+    description => 'Update existing webhook endpoint',
+    permissions => {
+	check => ['and',
+	    ['perm', '/mapping/notifications', ['Mapping.Modify']],
+	    ['or',
+		['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+		['perm', '/', [ 'Sys.AccessNetwork' ]],
+	    ],
+	],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => {
+	    %{ make_properties_optional($webhook_properties) },
+	    delete => {
+		type => 'array',
+		items => {
+		    type => 'string',
+		    format => 'pve-configid',
+		},
+		optional => 1,
+		description => 'A list of settings you want to delete.',
+	    },
+	    digest => get_standard_option('pve-config-digest'),
+	}
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+
+	my $name = extract_param($param, 'name');
+	my $delete = extract_param($param, 'delete');
+	my $digest = extract_param($param, 'digest');
+
+	eval {
+	    PVE::Notify::lock_config(sub {
+		my $config = PVE::Notify::read_config();
+
+		$config->update_webhook_endpoint(
+		    $name,
+		    $param,                # Config updater
+		    $delete,
+		    $digest,
+		);
+
+		PVE::Notify::write_config($config);
+	    });
+	};
+
+	raise_api_error($@) if $@;
+	return;
+    }
+});
+
+__PACKAGE__->register_method ({
+    name => 'delete_webhook_endpoint',
+    protected => 1,
+    path => 'endpoints/webhook/{name}',
+    method => 'DELETE',
+    description => 'Remove webhook endpoint',
+    permissions => {
+	check => ['perm', '/mapping/notifications', ['Mapping.Modify']],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => {
+	    name => {
+		type => 'string',
+		format => 'pve-configid',
+	    },
+	}
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+	my $name = extract_param($param, 'name');
+
+	eval {
+	    PVE::Notify::lock_config(sub {
+		my $config = PVE::Notify::read_config();
+		$config->delete_webhook_endpoint($name);
+		PVE::Notify::write_config($config);
+	    });
+	};
+
+	raise_api_error($@) if $@;
 	return;
     }
 });

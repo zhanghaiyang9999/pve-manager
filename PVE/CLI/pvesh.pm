@@ -116,7 +116,7 @@ sub proxy_handler {
 	}
     }
 
-    my @ssh_tunnel_cmd = ('ssh', '-o', 'BatchMode=yes', "root\@$remip");
+    my $ssh_tunnel_cmd = PVE::SSHInfo::ssh_info_to_command({ ip => $remip, name => $node });
 
     my @pvesh_cmd = ('pvesh', '--noproxy', $cmd, $path, '--output-format', 'json');
     if (scalar(@$args)) {
@@ -126,7 +126,7 @@ sub proxy_handler {
 
     my $res = '';
     PVE::Tools::run_command(
-	[ @ssh_tunnel_cmd, '--', @pvesh_cmd ],
+	[ $ssh_tunnel_cmd->@*, '--', @pvesh_cmd ],
 	errmsg => "proxy handler failed",
 	outfunc => sub { $res .= shift },
     );
@@ -351,7 +351,12 @@ sub call_api_method {
 
 	$data = $handler->handle($info, $param);
 
-	if (ref($data) eq 'HASH' && ref($data->{download}) eq 'HASH') {
+	# TODO: remove 'download' check with PVE 9.0
+	if (
+	    ref($data) eq 'HASH'
+	    && ref($data->{download}) eq 'HASH'
+	    && ($info->{download_allowed} || $info->{download})
+	) {
 	    $data = $handle_streamed_response->($data->{download})
 	}
     }

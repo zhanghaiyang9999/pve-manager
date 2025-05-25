@@ -12,6 +12,13 @@ Ext.define('PVE.sdn.VnetInputPanel', {
 	return values;
     },
 
+    initComponent: function() {
+	let me = this;
+
+	me.callParent();
+	me.setZoneType(undefined);
+    },
+
     items: [
 	{
 	    xtype: 'pmxDisplayEditField',
@@ -40,9 +47,21 @@ Ext.define('PVE.sdn.VnetInputPanel', {
 	    name: 'zone',
 	    value: '',
 	    allowBlank: false,
+	    listeners: {
+		change: function() {
+		    let me = this;
+
+		    let record = me.findRecordByValue(me.value);
+		    let zoneType = record?.data?.type;
+
+		    let panel = me.up('panel');
+		    panel.setZoneType(zoneType);
+		},
+	    },
 	},
 	{
 	    xtype: 'proxmoxintegerfield',
+	    itemId: 'sdnVnetTagField',
 	    name: 'tag',
 	    minValue: 1,
 	    maxValue: 16777216,
@@ -52,8 +71,21 @@ Ext.define('PVE.sdn.VnetInputPanel', {
 		deleteEmpty: "{!isCreate}",
 	    },
 	},
+    ],
+    advancedItems: [
 	{
 	    xtype: 'proxmoxcheckbox',
+	    name: 'isolate-ports',
+	    uncheckedValue: null,
+	    checked: false,
+	    fieldLabel: gettext('Isolate Ports'),
+	    cbind: {
+		deleteEmpty: "{!isCreate}",
+	    },
+	},
+	{
+	    xtype: 'proxmoxcheckbox',
+	    itemId: 'sdnVnetVlanAwareField',
 	    name: 'vlanaware',
 	    uncheckedValue: null,
 	    checked: false,
@@ -63,6 +95,26 @@ Ext.define('PVE.sdn.VnetInputPanel', {
 	    },
 	},
     ],
+
+    setZoneType: function(zoneType) {
+	let me = this;
+
+	let tagField = me.down('#sdnVnetTagField');
+	if (!zoneType || zoneType === 'simple') {
+	    tagField.setVisible(false);
+	    tagField.setValue('');
+	} else {
+	    tagField.setVisible(true);
+	}
+
+	let vlanField = me.down('#sdnVnetVlanAwareField');
+	if (!zoneType || zoneType === 'evpn') {
+	    vlanField.setVisible(false);
+	    vlanField.setValue('');
+	} else {
+	    vlanField.setVisible(true);
+	}
+    },
 });
 
 Ext.define('PVE.sdn.VnetEdit', {

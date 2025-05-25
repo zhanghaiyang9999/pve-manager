@@ -16,6 +16,7 @@ JSSRC= 							\
 	data/PermPathStore.js				\
 	data/ResourceStore.js				\
 	data/model/RRDModels.js				\
+	container/TwoColumnContainer.js			\
 	form/ACMEAPISelector.js 			\
 	form/ACMEAccountSelector.js			\
 	form/ACMEPluginSelector.js			\
@@ -34,6 +35,7 @@ JSSRC= 							\
 	form/ContentTypeSelector.js			\
 	form/ControllerSelector.js			\
 	form/DayOfWeekSelector.js			\
+	form/DirMapSelector.js                          \
 	form/DiskFormatSelector.js			\
 	form/DiskStorageSelector.js			\
 	form/FileSelector.js				\
@@ -97,6 +99,7 @@ JSSRC= 							\
 	grid/Replication.js				\
 	grid/ResourceGrid.js				\
 	panel/ConfigPanel.js				\
+	panel/BackupAdvancedOptions.js			\
 	panel/BackupJobPrune.js				\
 	panel/HealthWidget.js				\
 	panel/IPSet.js					\
@@ -106,6 +109,7 @@ JSSRC= 							\
 	panel/GuestSummary.js				\
 	panel/TemplateStatusView.js			\
 	panel/MultiDiskEdit.js				\
+	panel/TagConfig.js				\
 	tree/ResourceTree.js				\
 	tree/SnapshotTree.js				\
 	tree/ResourceMapTree.js				\
@@ -131,9 +135,12 @@ JSSRC= 							\
 	window/ScheduleSimulator.js			\
 	window/Wizard.js				\
 	window/GuestDiskReassign.js				\
+	window/GuestStop.js				\
 	window/TreeSettingsEdit.js			\
 	window/PCIMapEdit.js				\
 	window/USBMapEdit.js				\
+	window/DirMapEdit.js                            \
+	window/GuestImport.js				\
 	ha/Fencing.js					\
 	ha/GroupEdit.js					\
 	ha/GroupSelector.js				\
@@ -144,7 +151,6 @@ JSSRC= 							\
 	ha/StatusView.js				\
 	dc/ACLView.js					\
 	dc/ACMEClusterView.js				\
-	dc/ACMEPluginEdit.js				\
 	dc/AuthEditBase.js				\
 	dc/AuthEditAD.js				\
 	dc/AuthEditLDAP.js				\
@@ -184,9 +190,11 @@ JSSRC= 							\
 	dc/RealmSyncJob.js				\
 	dc/PCIMapView.js				\
 	dc/USBMapView.js				\
+	dc/DirMapView.js				\
 	lxc/CmdMenu.js					\
 	lxc/Config.js					\
 	lxc/CreateWizard.js				\
+	lxc/DeviceEdit.js				\
 	lxc/DNS.js					\
 	lxc/FeaturesEdit.js				\
 	lxc/MPEdit.js					\
@@ -259,9 +267,11 @@ JSSRC= 							\
 	qemu/SSHKey.js					\
 	qemu/ScsiHwEdit.js				\
 	qemu/SerialEdit.js				\
+	qemu/SevEdit.js					\
 	qemu/Smbios1Edit.js				\
 	qemu/SystemEdit.js				\
 	qemu/USBEdit.js					\
+	qemu/VirtiofsEdit.js				\
 	sdn/Browser.js					\
 	sdn/ControllerView.js				\
 	sdn/Status.js					\
@@ -274,6 +284,8 @@ JSSRC= 							\
 	sdn/SubnetView.js				\
 	sdn/ZoneContentView.js				\
 	sdn/ZoneContentPanel.js				\
+	sdn/FirewallPanel.js				\
+	sdn/FirewallVnetView.js				\
 	sdn/ZoneView.js					\
 	sdn/IpamEdit.js					\
 	sdn/OptionsPanel.js				\
@@ -316,6 +328,7 @@ JSSRC= 							\
 	storage/TemplateView.js				\
 	storage/ZFSEdit.js				\
 	storage/ZFSPoolEdit.js				\
+	storage/ESXIEdit.js				\
 	Workspace.js					\
 # end of JSSRC list
 

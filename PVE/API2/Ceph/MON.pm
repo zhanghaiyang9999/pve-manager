@@ -147,14 +147,15 @@ my $assert_mon_prerequisites = sub {
 my $assert_mon_can_remove = sub {
     my ($monhash, $monlist, $monid, $mondir) = @_;
 
-    if (!(defined($monhash->{"mon.$monid"}) ||
-	  grep { $_->{name} && $_->{name} eq $monid } @$monlist))
-    {
+    if (
+        !defined($monhash->{$monid} ||
+        grep { defined($_->{name}) && $_->{name} eq $monid } $monlist->@*)
+    ) {
 	die "no such monitor id '$monid'\n"
     }
 
     die "monitor filesystem '$mondir' does not exist on this node\n" if ! -d $mondir;
-    die "can't remove last monitor\n" if scalar(@$monlist) <= 1;
+    die "can't remove last monitor\n" if scalar($monlist->@*) <= 1;
 };
 
 my $remove_addr_from_mon_host = sub {
@@ -450,6 +451,14 @@ __PACKAGE__->register_method ({
 			)
 		    };
 		    warn "$@" if $@;
+
+		    print "Configuring keyring for ceph-crash.service\n";
+		    eval {
+			PVE::Ceph::Tools::create_or_update_crash_keyring_file();
+			$cfg->{'client.crash'}->{keyring} = '/etc/pve/ceph/$cluster.$name.keyring';
+			cfs_write_file('ceph.conf', $cfg);
+		    };
+		    warn "Unable to configure keyring for ceph-crash.service: $@" if $@;
 		}
 
 		eval { PVE::Ceph::Services::ceph_service_cmd('enable', $monsection) };

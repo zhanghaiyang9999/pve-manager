@@ -103,7 +103,7 @@ Ext.define('PVE.qemu.HardwareView', {
 		tdCls: 'pve-itype-icon-cpu',
 		group: 3,
 		defaultValue: '1',
-		multiKey: ['sockets', 'cpu', 'cores', 'numa', 'vcpus', 'cpulimit', 'cpuunits'],
+		multiKey: ['sockets', 'cpu', 'cores', 'numa', 'vcpus', 'cpulimit', 'cpuunits', 'affinity'],
 		renderer: function(value, metaData, record, rowIndex, colIndex, store, pending) {
 		    var sockets = me.getObjectValue('sockets', 1, pending);
 		    var model = me.getObjectValue('cpu', undefined, pending);
@@ -112,6 +112,7 @@ Ext.define('PVE.qemu.HardwareView', {
 		    var vcpus = me.getObjectValue('vcpus', undefined, pending);
 		    var cpulimit = me.getObjectValue('cpulimit', undefined, pending);
 		    var cpuunits = me.getObjectValue('cpuunits', undefined, pending);
+		    var cpuaffinity = me.getObjectValue('affinity', undefined, pending);
 
 		    let res = Ext.String.format(
 		        '{0} ({1} sockets, {2} cores)', sockets * cores, sockets, cores);
@@ -130,6 +131,9 @@ Ext.define('PVE.qemu.HardwareView', {
 		    }
 		    if (cpuunits) {
 			res += ' [cpuunits=' + cpuunits +']';
+		    }
+		    if (cpuaffinity) {
+			res += ' [cpuaffinity=' + cpuaffinity + ']';
 		    }
 
 		    return res;
@@ -214,6 +218,9 @@ Ext.define('PVE.qemu.HardwareView', {
 	    ostype: {
 		visible: false,
 	    },
+	    affinity: {
+		visible: false,
+	    },
 	};
 
 	PVE.Utils.forEachBus(undefined, function(type, id) {
@@ -226,6 +233,7 @@ Ext.define('PVE.qemu.HardwareView', {
 		header: gettext('Hard Disk') + ' (' + confid +')',
 		cdheader: gettext('CD/DVD Drive') + ' (' + confid +')',
 		cloudheader: gettext('CloudInit Drive') + ' (' + confid + ')',
+		renderer: Ext.htmlEncode,
 	    };
 	});
 	for (let i = 0; i < PVE.Utils.hardware_counts.net; i++) {
@@ -245,6 +253,7 @@ Ext.define('PVE.qemu.HardwareView', {
 	    editor: null,
 	    never_delete: !caps.vms['VM.Config.Disk'],
 	    header: gettext('EFI Disk'),
+	    renderer: Ext.htmlEncode,
 	};
 	rows.tpmstate0 = {
 	    group: 22,
@@ -252,6 +261,7 @@ Ext.define('PVE.qemu.HardwareView', {
 	    editor: null,
 	    never_delete: !caps.vms['VM.Config.Disk'],
 	    header: gettext('TPM State'),
+	    renderer: Ext.htmlEncode,
 	};
 	for (let i = 0; i < PVE.Utils.hardware_counts.usb; i++) {
 	    let confid = "usb" + i.toString();
@@ -300,15 +310,26 @@ Ext.define('PVE.qemu.HardwareView', {
 		del_extra_msg: gettext('This will permanently erase all data.'),
 		editor: caps.vms['VM.Config.Disk'] ? 'PVE.qemu.HDEdit' : undefined,
 		header: gettext('Unused Disk') + ' ' + i.toString(),
+		renderer: Ext.htmlEncode,
 	    };
 	}
 	rows.rng0 = {
 	    group: 45,
 	    tdCls: 'pve-itype-icon-die',
-	    editor: caps.nodes['Sys.Console'] ? 'PVE.qemu.RNGEdit' : undefined,
-	    never_delete: !caps.nodes['Sys.Console'],
+	    editor: caps.vms['VM.Config.HWType'] || caps.mapping['Mapping.Use'] ? 'PVE.qemu.RNGEdit' : undefined,
+	    never_delete: !caps.vms['VM.Config.HWType'] && !caps.mapping['Mapping.Use'],
 	    header: gettext("VirtIO RNG"),
 	};
+	for (let i = 0; i < PVE.Utils.hardware_counts.virtiofs; i++) {
+	    let confid = "virtiofs" + i.toString();
+	    rows[confid] = {
+		group: 50,
+		order: i,
+		iconCls: 'folder',
+		editor: 'PVE.qemu.VirtiofsEdit',
+		header: gettext('Virtiofs') + ' (' + confid +')',
+	    };
+	}
 
 	var sorterFn = function(rec1, rec2) {
 	    var v1 = rec1.data.key;
@@ -486,17 +507,19 @@ Ext.define('PVE.qemu.HardwareView', {
 		return msg;
 	    },
 	    handler: function(btn, e, rec) {
+		let params = { 'delete': rec.data.key };
+		if (btn.RESTMethod === 'POST') {
+		    params.background_delay = 5;
+		}
 		Proxmox.Utils.API2Request({
 		    url: '/api2/extjs/' + baseurl,
 		    waitMsgTarget: me,
 		    method: btn.RESTMethod,
-		    params: {
-			'delete': rec.data.key,
-		    },
+		    params: params,
 		    callback: () => me.reload(),
 		    failure: response => Ext.Msg.alert('Error', response.htmlStatus),
 		    success: function(response, options) {
-			if (btn.RESTMethod === 'POST') {
+			if (btn.RESTMethod === 'POST' && response.result.data !== null) {
 			    Ext.create('Proxmox.window.TaskProgress', {
 				autoShow: true,
 				upid: response.result.data,
@@ -576,22 +599,22 @@ Ext.define('PVE.qemu.HardwareView', {
 	    });
 
 	    // heuristic only for disabling some stuff, the backend has the final word.
-	    const noSysConsolePerm = !caps.nodes['Sys.Console'];
-	    const noHWPerm = !caps.nodes['Sys.Console'] && !caps.mapping['Mapping.Use'];
 	    const noVMConfigHWTypePerm = !caps.vms['VM.Config.HWType'];
 	    const noVMConfigNetPerm = !caps.vms['VM.Config.Network'];
 	    const noVMConfigDiskPerm = !caps.vms['VM.Config.Disk'];
 	    const noVMConfigCDROMPerm = !caps.vms['VM.Config.CDROM'];
 	    const noVMConfigCloudinitPerm = !caps.vms['VM.Config.Cloudinit'];
+	    const noVMConfigOptionsPerm = !caps.vms['VM.Config.Options'];
 
-	    me.down('#addUsb').setDisabled(noHWPerm || isAtUsbLimit());
-	    me.down('#addPci').setDisabled(noHWPerm || isAtLimit('hostpci'));
+	    me.down('#addUsb').setDisabled(noVMConfigHWTypePerm || isAtUsbLimit());
+	    me.down('#addPci').setDisabled(noVMConfigHWTypePerm || isAtLimit('hostpci'));
 	    me.down('#addAudio').setDisabled(noVMConfigHWTypePerm || isAtLimit('audio'));
 	    me.down('#addSerial').setDisabled(noVMConfigHWTypePerm || isAtLimit('serial'));
 	    me.down('#addNet').setDisabled(noVMConfigNetPerm || isAtLimit('net'));
-	    me.down('#addRng').setDisabled(noSysConsolePerm || isAtLimit('rng'));
+	    me.down('#addRng').setDisabled(noVMConfigHWTypePerm || isAtLimit('rng'));
 	    efidisk_menuitem.setDisabled(noVMConfigDiskPerm || isAtLimit('efidisk'));
-	    me.down('#addTpmState').setDisabled(noSysConsolePerm || isAtLimit('tpmstate'));
+	    me.down('#addTpmState').setDisabled(noVMConfigDiskPerm || isAtLimit('tpmstate'));
+	    me.down('#addVirtiofs').setDisabled(noVMConfigOptionsPerm || isAtLimit('virtiofs'));
 	    me.down('#addCloudinitDrive').setDisabled(noVMConfigCDROMPerm || noVMConfigCloudinitPerm || hasCloudInit);
 
 	    if (!rec) {
@@ -606,6 +629,7 @@ Ext.define('PVE.qemu.HardwareView', {
 
 	    const deleted = !!rec.data.delete;
 	    const pending = deleted || me.hasPendingChanges(key);
+	    const isRunning = me.pveSelNode.data.running;
 
 	    const isCloudInit = isCloudInitKey(value);
 	    const isCDRom = value && !!value.toString().match(/media=cdrom/);
@@ -614,7 +638,7 @@ Ext.define('PVE.qemu.HardwareView', {
 	    const isUsedDisk = !isUnusedDisk && row.isOnStorageBus && !isCDRom;
 	    const isDisk = isUnusedDisk || isUsedDisk;
 	    const isEfi = key === 'efidisk0';
-	    const tpmMoveable = key === 'tpmstate0' && !me.pveSelNode.data.running;
+	    const tpmMoveable = key === 'tpmstate0' && !isRunning;
 
 	    let cannotDelete = deleted || row.never_delete;
 	    cannotDelete ||= isCDRom && !cdromCap;
@@ -623,7 +647,7 @@ Ext.define('PVE.qemu.HardwareView', {
 	    remove_btn.setDisabled(cannotDelete);
 
 	    remove_btn.setText(isUsedDisk && !isCloudInit ? remove_btn.altText : remove_btn.defaultText);
-	    remove_btn.RESTMethod = isUnusedDisk ? 'POST':'PUT';
+	    remove_btn.RESTMethod = isUnusedDisk || (isDisk && isRunning) ? 'POST' : 'PUT';
 
 	    edit_btn.setDisabled(
 	        deleted || !row.editor || isCloudInit || (isCDRom && !cdromCap) || (isDisk && !diskCap));
@@ -634,7 +658,6 @@ Ext.define('PVE.qemu.HardwareView', {
 		isCloudInit ||
 		!(isDisk || isEfi || tpmMoveable),
 	    );
-	    move_menuitem.setDisabled(isUnusedDisk);
 	    reassign_menuitem.setDisabled(pending || (isEfi || tpmMoveable));
 	    resize_menuitem.setDisabled(pending || !isUsedDisk);
 
@@ -733,8 +756,15 @@ Ext.define('PVE.qemu.HardwareView', {
 				text: gettext("VirtIO RNG"),
 				itemId: 'addRng',
 				iconCls: 'pve-itype-icon-die',
-				disabled: !caps.nodes['Sys.Console'],
+				disabled: !caps.vms['VM.Config.HWType'] && !caps.mapping['Mapping.Use'],
 				handler: editorFactory('RNGEdit'),
+			    },
+			    {
+				text: gettext("Virtiofs"),
+				itemId: 'addVirtiofs',
+				iconCls: 'fa fa-folder',
+				disabled: !caps.nodes['Sys.Console'],
+				handler: editorFactory('VirtiofsEdit'),
 			    },
 			],
 		    }),

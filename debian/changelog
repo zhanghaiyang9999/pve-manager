@@ -1,3 +1,681 @@
+pve-manager (8.4.1) bookworm; urgency=medium
+
+  * ui: fix regression with checking if volume is QEMU backup, which could
+    block some dialogues like file-restore.
+
+  * ceph versions: do not try to parse empty string and include raw string in
+    error to make this easier to debug.
+
+  * ui: backup: hide change mode detection for VMs and non-PBS storage.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Apr 2025 12:39:07 +0200
+
+pve-manager (8.4.0) bookworm; urgency=medium
+
+  * ui: qemu: hardware view: fix capability check for using the hardware
+    random number generator (RNG) as users without broad admin privileges.
+
+  * ui: qemu: unify enabled state of PCI, USB and RNG.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Apr 2025 08:40:25 +0200
+
+pve-manager (8.3.7) bookworm; urgency=medium
+
+  * ui: directory mapping: use actual words in the title
+
+  * ui: virtiofs edit: drop writeback checkbox, this feature is unsafe and
+    behaves in unexpected ways.
+
+  * ui: set error mask: ensure that message is html-encoded to avoid glitches.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 17:39:36 +0200
+
+pve-manager (8.3.6) bookworm; urgency=medium
+
+  * fix #5175: ui: allow configuring and live-migration of mapped PCI
+    (vGPU) resources.
+
+  * mapping: pci: include mdev in config checks.
+
+  * ui: qemu: add configuration options for AMD SEV-SNP support.
+
+  * fix #5463: show optional consent-banner before user can login. The banner
+    can be configured in the datacenter options.
+
+  * fix #5936: ui: backup: add CT PBS change detection mode selector for
+    manual container backup dialogue.
+
+  * fix #2413: pvestatd: read ballooning RAM usage target from node config.
+
+  * fix #3716: api: use proxy option for https when querying the metadata for
+    a to be downloaded template or ISO file.
+
+  * ui: let non-root users configure VirtIO RNG devices if they have
+    the VM.Config.HWType privilege.
+
+  * ui: remove warning about entropy starvation of /dev/random, it does not
+    apply since kernel 5.6 anymore.
+
+  * ui: permissions: add ACL path for hardware RNG.
+
+  * bulk migrate: improve precondition checks to also includes unavailable
+    storages on the target node.
+
+  * ui: adapt migration window to precondition api additions.
+
+  * ui: fix string used for backup storage content-type for PBS backups.
+
+  * ui: lxc create: do not suggest nesting is enabled for privileged CTs,
+    correctly clear the checkbox state when disabling it for that case.
+
+  * ui: ceph: use common spelling for metadata servers in title
+
+  * api subscription: output generic apt-auth stanza for ceph.
+
+  * api subscription: fix permissions for ceph apt-auth file.
+
+  * system report: add WWN column to lsblk output.
+
+  * pve7to8: fix broken pipe warning for dkms status invocation.
+
+  * ui: ensure various fields are html-encoded to avoid visual glitches.
+
+  * fix #4411: ui: OpenID Connect realm: add fields for new group-mapping
+    support, where a configured user claim is queried for the list of groups
+    that a users should be set or added to.
+
+  * ui: tasks: add icon to better convey that one can open the task log from
+    the list of task entries.
+
+  * notifications: rework and clean-up various templates used to send
+    notifications, including those for apt updates, backups, and replication.
+
+  * node configuration: add per-node option for memory ballooning target and
+    allow one to edit them through the web UI.
+
+  * backup: implement backup for external providers with full integration
+    reusing and extending our custom storage plugin architecture.
+
+  * fix #6116: ui: qemu: create wizard: order main ISO CDROM drive before
+    additional added CDROM drives in the boot order.
+
+  * user: password edit: show hint to clarify that password changes for PAM
+    realm only apply to connected node.
+
+  * ui: guest migrate window: make all user-visible strings translatable.
+
+  * ui: do not split translatable strings.
+
+  * ui: qemu pci edit: select correct radiobutton when editing.
+
+  * ui: add human readable description for `reloadnetworkall` task.
+
+  * close #3181: ui: display guest name alongside VMID in confirm dialogs of
+    potentially destructive actions.
+
+  * ui: storage content: allow upload of guest images for import type.
+
+  * api: add resource map api endpoints for directories.
+
+  * ui: add management for directory mappings in the datacenter view.
+
+  * ui: qemu: allow one to add Virtiofs devices to passthrough a directory
+    mapping managed folder to the VM.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 00:44:51 +0200
+
+pve-manager (8.3.5) bookworm; urgency=medium
+
+  * update shipped appliance info index
+
+  * fix #6138: ui: storage content: use locale for sorting
+
+  * ui: sdn ipam: powerDNS, NetBox, phpIPAM: split layout in two columns
+
+  * ui: sdn ipam: powerDNS, NetBox, phpIPAM: add fingerprint textfield
+
+  * ui: storage pbs: re-use new pmxFingerprintField from widget-toolkit
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Mar 2025 10:50:15 +0100
+
+pve-manager (8.3.4) bookworm; urgency=medium
+
+  * fix #5699: add support to define a HTTP header from which the real IP of a
+    connection should be parsed from. This can be useful for setups with a
+    reverse proxy in front of the API server. On top of that add support for
+    optionally configuring an allow-list of IP networks that the real source
+    IP must match one to allow the connection to be handled.
+    The related config variables are named `PROXY_REAL_IP_HEADER` and
+    `PROXY_REAL_IP_ALLOW_FROM` respectively.
+
+  * api: network: improve completeness of return schema.
+
+  * ui: qemu: add hint that VMs using the VNC clipboard cannot be live
+    migrated.
+
+  * fix #6142: ui: datacenter options: allow custom CIDRs for migration
+    network to cover cases where the network CIDR is not configured on any
+    network interfaces on the node, like for example in a routed full-mesh
+    configuration.
+
+  * pull metric: fix node 'iowait' metric, return the percentage of time spent
+    on waiting on IO in a certain time frame instead of returning the total
+    amount of time that was spent waiting on IO, similar to how the push based
+    metric servers do.
+
+  * d/control: add new pve-nvidia-vgpu-helper package as recommended
+    dependency.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Feb 2025 15:26:20 +0100
+
+pve-manager (8.3.3) bookworm; urgency=medium
+
+  * update shipped appliance info index
+
+  * add missing htmlEncode for some UI elements
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jan 2025 11:37:32 +0100
+
+pve-manager (8.3.2) bookworm; urgency=medium
+
+  * api: network: add return schema for interface listing
+
+  * ui: ceph pool: indentation clean-up
+
+  * ui: ceph: don't set default size/min-size when editing existing pool
+
+  * ui: ceph pool: add opt-in column for the configured pool application
+
+  * ui: qemu: improve error handling and rendering the QGA provided IP
+    addresses of the guest.
+
+  * api: node status: complete API return schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Dec 2024 17:52:29 +0100
+
+pve-manager (8.3.1) bookworm; urgency=medium
+
+  * ui: sdn firewall: add online help reference
+
+  * ui: cluster join info: add clipboard icon to "Copy Information" button
+
+  * external metric server: influxdb: always quote tags
+
+  * api: notification targets: fix permission check for POST/PUT
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 29 Nov 2024 11:42:46 +0100
+
+pve-manager (8.3.0) bookworm; urgency=medium
+
+  * ceph: drop preview flag for the Ceph Squid release
+
+  * aplinfo: update TurnkeyLinux key after expiry
+
+  * update shipped aplliance info index
+
+  * ui: firewall rules: add empty text to grid
+
+  * ui: sdn vnet, zone: add empty text to grids
+
+  * ui: sdn: add VNET prefix to vnet-specific firewall navigation label
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2024 11:39:37 +0100
+
+pve-manager (8.2.10) bookworm; urgency=medium
+
+  * ui: firewall: add sdn as valid scope to IP-set selector
+
+  * ui: firewall: add forward direction to rule panel
+
+  * ui: sdn: add firewall panel
+
+  * ui: firewall: show warning when creating forward rules
+
+  * ui: import: clarify working storage emptyText
+
+  * change recommendation of pve-network packages to hard dependency, it's now
+    pulled in by pve-firewall anyway
+
+  * api: notifications: require powerful privileges for target management
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 19:44:36 +0100
+
+pve-manager (8.2.9) bookworm; urgency=medium
+
+  * api/ui: improve mdev listing for PCI mappings. Extend the parameter for
+    the PCI ID to accept both, PCI IDs or named mappings, and for the latter
+    mappings, iterate over all local PCI devices in it and extract the mdev
+    types.
+
+  * ui: implement 'Tag View' for the resource tree, which groups guests by
+    their tags. Guests with multiple tags are visible under each of them.
+    Guests without tags and nodes and storages are added to the end of the
+    tree.
+
+  * ui: cloudinit: use cloudinit update api when regenerating images.
+
+  * ui: cloudinit: avoid suggesting to unprivileged users that they can
+    re-generate the image, disable the button in this case.
+
+  * fix #5787: ui: display guest name in confirmation dialog for actions like
+    start, stop, shut down, or converting to a template.
+
+  * ui: lxc: add readonly option for device passthrough.
+
+  * ui: lxc: add the "discard" mount option.
+
+  * ui: expose the newly supported BZIP2 as available compressor for backups.
+
+  * fix #5722: ui: api token: allow unprivileged users to create their own api
+    tokens, they are self-service after all.
+
+  * api: add routes for webhook notification endpoints.
+
+  * ui: workspace/user view: change password minimum length to 8 to follow
+    recent NIST recommendations.
+
+  * ui: pool: dynamic status update every 10s in members screen
+
+  * ui: pbs storage: fix reset behavior when editing existing entry
+
+  * api/ui: include the node ha status in resources call and show as icon
+
+  * ui: acme: switch cluster view items over to those from widget-toolkit
+
+  * ui: tree: show tooltips for all entries that have sensible information
+
+  * fix #3893: api/ui: node network: expose bridge VLAN IDs option to allow
+    one to configure VLAN ranges, This can be useful for devices that support
+    hardware offloading them, but only support a limited amount.
+
+  * ui: remove experimental from change detection modes description
+
+  * ui: add import content type for file-based storages to allow handling
+    imports of OVA/OVF backed archives more conveniently.
+
+  * ui: guest import: add storage selector for overriding the OVA staging
+    storage for the temporary extraction.
+
+  * ui: import: show size for dir-based storages
+
+  * ui: enable upload/download/remove buttons for 'import' type storages
+
+  * ui: qemu: add AMD SEV configuration to Options
+
+  * fix #5879: ui: add tooltip to security group comments
+
+  * fix #5810: ui: show confirmation/warning dialog for sdn apply
+
+  * api: package repositories: add Ceph Squid to available repos
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2024 23:20:04 +0100
+
+pve-manager (8.2.8) bookworm; urgency=medium
+
+  * fix #5734: provide missing methods for Proxmox.Utils for mobile UI
+
+  * api: subscription update: report error if removing ceph-auth file fails
+
+  * add module to centrally track Ceph release info for the backend
+
+  * pveceph: prompt user on TTY about installing experimental version
+
+  * ceph releases: add 19.2 Squid as available release, currently still as
+    technology preview
+
+  * fix #5753: api: add 'pstart' member to task status return schema
+
+  * fix #5302: ui: vm cpu affinity displayed in hardware overview
+
+  * fix typos in user visible strings
+
+  * fix #5632: ui:storage: correct online help link of backup view
+
+  * ui: ceph wizard: show hint for releases that are in tech-preview state
+
+  * ui: ceph wizard: filter out enterprise repo for tech-preview releases
+
+  * ui: ceph wizard: add Ceph 19.2 Squid as installable release
+
+  * api: improve the API JSON schema of various API calls
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Oct 2024 16:47:02 +0200
+
+pve-manager (8.2.7) bookworm; urgency=medium
+
+  * api: add missing schema annotations for download endpoints and adapt
+    existing ones to renaming the respective property to 'download_allowed'.
+
+  * pvesh: limit download handling to annotated endpoints to unify the
+    behaviour with pve-http-server.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Sep 2024 11:43:24 +0200
+
+pve-manager (8.2.6) bookworm; urgency=medium
+
+  * fix #5731: vzdump jobs: fix execution of converted jobs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Sep 2024 17:47:17 +0200
+
+pve-manager (8.2.5) bookworm; urgency=medium
+
+  * ui: qemu hardware: use background delay for asynchronous remove tasks so
+    that the task log window doesn't get shown if the task already finished.
+
+  * ui: qemu hardware: use asynchronous remove API call for disk hot-unplug to
+    expand the task duration timeout from 30 seconds to 10 minutes, helping
+    overloaded and/or slow systems.
+
+  * vzdump config: add fleecing property string to make it clear that fleecing
+    can be configured as a node-wide default too.
+
+  * ui: fix align mode of the two-column container widget, which is used for
+    the advanced tab of the backup job edit window.
+
+  * vzdump: fix unit for bandwidth limit in log message, it's in KiB (base 2)
+    not KB (base 10)
+
+  * pve7to8: allow one to run arbitrary newer Proxmox kernels after upgrade
+
+  * api: replication: add 'job-id' to notification metadata to allow users to
+    create notification match rules for specific replication jobs.
+
+  * vzdump: apt: notification: do not include domain in 'hostname' field.
+
+  * api: replication: include 'hostname' field for notifications.
+
+  * pve7to8: fix typo in log message.
+
+  * ui: backup job: clarify experimental change detection modes.
+
+  * ui: fix `maxcpu` validity check in the host CPU renderer to add a missing
+    space, making it consistent with the CPU usage column.
+
+  * ui: utils: fix inconsistency in host cpu usage display in search view,
+    adding a missing space between the number of CPUs and the actual label.
+
+  * ui: sdn ipam: fix editing custom mappings
+
+  * api: ceph mds: ensure the ID for a new MDS does not start with a number,
+    as Ceph doesn't supports that.
+
+  * fix #5570 ui: ceph: make the MDS ID fully configurable to avoid a issue
+    when the hostname, which is was used as base for the ID, starts with a
+    number. This also made the "extra ID" field redundant.
+
+  * fix #5010: ceph: pool set only properties that actually changed to avoid
+    false-positive errors.
+
+  * api: backup jobs: pass the job ID parameter to make it accessible for the
+    notification system.
+
+  * ui: backup jobs: allow one to set custom job ID in advanced settings
+
+  * ui: resource mappings: fix editing of mapping for non first node
+
+  * ui: sdn vnets: hide irrelevant fields depending on zone type
+
+  * ui: dc summary: fix calculation of storage size when one or more nodes are
+    offline
+
+  * api: metrics: add /cluster/metrics/export endpoint
+
+  * ui: qemu: hardware: fix permission check for enabling the button to add a
+    TPM-state volume
+
+  * update shipped appliance info index
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Sep 2024 14:37:24 +0200
+
+pve-manager (8.2.4) bookworm; urgency=medium
+
+  * pvestatd: clear trailing newlines
+
+  * www: advanced backup: add pbs change detection mode selector
+
+  * vzdump: add pbs-change-detection-mode to config template
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Jun 2024 13:59:52 +0200
+
+pve-manager (8.2.3) bookworm; urgency=medium
+
+  * update shipped appliance info index
+
+  * api: add proxmox-firewall to versions pkg list
+
+  * gitignore: ignore any test artifacts
+
+  * tests: remove vzdump_notification test
+
+  * notifications: use named templates instead of in-code templates
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Jun 2024 11:08:41 +0200
+
+pve-manager (8.2.2) bookworm; urgency=medium
+
+  * ui: fix form-reset behavior of backup job editor
+
+  * ui: backup jobs: fix fleecing parameters for 'run now' button
+
+  * ui: mobile: fix login for users that have a TOTP based second factor set up
+
+  * ui: mobile: show is setup is lacking the best recommendations for
+    enterprise production set ups
+
+  * vzdump: also warn when hook script fails for backup-abort or log-end phase
+
+  * ui: user edit: protect user's TFA settings for new factor variants
+
+  * fix #5251: ui: login: set autocomplete on password and user
+
+  * ui: esxi importer: try to better convey what live-import does
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 21:33:31 +0200
+
+pve-manager (8.2.1) bookworm; urgency=medium
+
+  * d/control: add proxmox-firewall as recommended dependency
+
+  * ui: backup job: correctly align descriptions with fields in advanced
+    options
+
+  * ui: backup job: rework empty-text for advanced fields again, mention schema
+    default values at the end of the descriptions
+
+  * ui: acme eab: handle missing meta field in directory response
+
+  * ui: qemu: add clipboard selection as advanced option to display editor
+
+  * ui: qemu: allow one to enable a vIOMMU (emulated IOMMU) in the machine
+    editor
+
+  * ui: backup job: allow setting up fleecing for a job in advanced config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Apr 2024 19:36:21 +0200
+
+pve-manager (8.2.0) bookworm; urgency=medium
+
+  * node: firewall options: add setting to select new nftables-based firewall
+    implementation tech preview
+
+  * ui: virtual machines: add Windows Server 2025 to OS types
+
+  * ui: browser local settings: add new edit-notes-on-double-click option
+
+  * fix #4474: ui: guest stop: offer to overrule active shutdown tasks
+
+  * ui: backup job: disable 'mailtnotification' field if the notification mode
+    is set to 'auto'
+
+  * ui: backup job: switch order of 'mailto' and 'mailnotification' field
+
+  * ui: sdn: QinQ: vlan: properly validate bridge name
+
+  * ui: sdn: vlan: fix indentation in vlan edit dialogue
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 21 Apr 2024 13:03:54 +0200
+
+pve-manager (8.1.11) bookworm; urgency=medium
+
+  * fix #4136: backup: implement fleecing option for improved guest
+    stability when the backup target is slow
+
+  * api: notifications: add missing 'smtp' to index
+
+  * use SSH command helper for pvesh and to get VNC connection info to benefit
+    from improvements like known host key pinning
+
+  * system report: list held-back and pinned APT packages and priorities of APT
+    sources
+
+  * system report: avoid printing the contents of certain wrongly named
+    configuration files
+
+  * system report: output cluster-wide job configuration
+
+  * system report: output kernel command line from current boot
+
+  * ui: acl: allow searching by typing in the group selector
+
+  * api: apt versions: track optional amd64-/intel-microcode and
+    pve-esxi-import-tools packages
+
+  * ui: acme: add External Account Binding (EAB) related fields
+
+  * fix #5093: ui: acme: expose custom directory option
+
+  * d/postinst: make deb-systemd-invoke non-fatal to avoid potentially
+    breaking an update for unrelated reasons
+
+  * fix #4513: ui: backup job: add tab for advanced options
+
+  * vzdump: improve handling performance settings, by using a per-property
+    fallback and honoring the schema defaults
+
+  * ui: lxc: add edit window for device passthrough
+
+  * ui: lxc: add firewall log view filtering
+
+  * fix #4963: ui: firewall: fix edge case where editing firewall rules using
+    ips / cidrs would be broken
+
+  * fix #1905: ui: VM: allow moving unused disks
+
+  * fix #4759: ceph: configure ceph-crash.service and its key
+
+  * sdn: evpn: allow empty primary exit node in zone form which was broken by a
+    change in libpve-network-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2024 16:24:37 +0200
+
+pve-manager (8.1.10) bookworm; urgency=medium
+
+  * guest import: allow setting VLAN-tag for network devices in advanced tab
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Mar 2024 19:57:05 +0100
+
+pve-manager (8.1.9) bookworm; urgency=medium
+
+  * ui: guest import: actually copy the initial guest config state before
+    applying value overrides to avoid a old state being send if one edits the
+    values after checking the resulting config tab before hand
+
+  * fix #5255: node: wol: add optional bind-interface where magic packet is
+    sent on
+
+  * fix #5255: node: wol: make broadcast address configurable
+
+  * fix #5337: ui: parse a port in the server field
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Mar 2024 18:12:47 +0100
+
+pve-manager (8.1.8) bookworm; urgency=medium
+
+  * ui: parser: recognize Intel E1000E as network card
+
+  * ui: network card selector: add Intel E1000E as choosable model
+
+  * ui: guest import: allow setting mac addresses to newly generated unique
+    ones
+
+  * ui: guest import: use box-label style for prepare-for-virtio checkbox
+
+  * ui: guest import: fine tune icons
+
+  * ui: guest import: validate that selected VMID does not exist yet
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Mar 2024 14:33:49 +0100
+
+pve-manager (8.1.7) bookworm; urgency=medium
+
+  * fix #5293: ceph status: fix division-by-zero when calculating usage
+
+  * ui: guest import: improve detection of windows OS type for showing the
+    "prepare for VirtIO" change
+
+  * ui: guest import: auto activate virtio preparation for Windows VMs with
+    EFI (OVMF)
+
+  * ui: guest import: correctly set default SCSI-controller hardware value
+
+  * ui: guest import: add warning text for EFI state, including boot entries,
+    will be lost on migration
+
+  * ui: parse VM network: support floats without trailing zero
+
+  * ui: user: password change: require a confirmation-password
+
+  * ui: vm: guest-agent network view: make text in grid selectable
+
+  * fix #5198: ceph: mon: fix mon existence check in mon removal assertion
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Mar 2024 11:54:28 +0100
+
+pve-manager (8.1.6) bookworm; urgency=medium
+
+  * ui: add guest import wizard in the content browser for storages that
+     upport the new 'import' content type.
+
+  * ui: support to add the new ESXi storage type, which provides only the
+    'import' content type and can be used for importing VMs from a ESXi host
+    into Proxmox VE directly.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Mar 2024 15:26:33 +0100
+
+pve-manager (8.1.5) bookworm; urgency=medium
+
+  * report: format iptables output for readability
+
+  * fix #5067: vzdump: include total backup size in notification
+
+  * ui: storage: zfs: set blocksize placeholder (empty text) to 16k
+
+  * ui: add compat for fix of previously wrongly used Korean language code
+
+  * ui: lvm: expose saferemove setting
+
+  * pvesubscription: add missing return statement to avoid a failing null
+    check and its error message.
+
+  * ceph: fix edge case of wrong files being deleted on purge
+
+  * ui: node: system: avoid using specific and outdated 'Syslog', just call it
+    'System Log'
+
+  * fix #5106: ui: ceph status: make column wrap the summary text on expand
+
+  * ui: qemu: bump max cores to 256 by socket
+
+  * api: node status: document boot-info and current-kernel in return schema
+
+  * api: nodes: allow usage of query url metadata with Sys.AccessNetwork
+
+  * ui: storage: enable download-url button with Sys.AccessNetwork capability
+
+  * ui: IP-set: re-work column widths
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Mar 2024 15:13:26 +0100
+
 pve-manager (8.1.4) bookworm; urgency=medium
 
   * api: apt versions: track dnsmasq and frr-pythontools as optional packages
@@ -335,7 +1013,7 @@ pve-manager (8.0.0~9) bookworm; urgency=medium
   * ui: create VM: use new x86-64-v2-AES as new default vCPU type.
     The x86-64-v2-aes is compatible with Intel Westmere, launched in 2010 and
     Opteron 6200-series "Interlagos" launched in 2011.
-    This model provides a few important extra fetures over the qemu64/kvm64
+    This model provides a few important extra features over the qemu64/kvm64
     model (which are basically v1 minus the -vme,-cx16 CPU flags) like SSE4.1
     and additionally also AES, while not supported by all v2 models it is by
     all recent ones, improving performance of many computing operations
@@ -440,7 +1118,7 @@ pve-manager (8.0.0~7) bookworm; urgency=medium
 
 pve-manager (8.0.0~6) bookworm; urgency=medium
 
-  * vzdump: prepare to support 'exclude-path' as arry (multiple lines in the
+  * vzdump: prepare to support 'exclude-path' as array (multiple lines in the
     config)
 
  -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jun 2023 10:05:00 +0200
@@ -520,7 +1198,7 @@ pve-manager (7.4-2) bullseye; urgency=medium
 
   * ui: lvm-thin: fix not being able to edit the storage
 
-  * replication: fix uninitalized warning
+  * replication: fix uninitialized warning
 
   * api: apt: versions: also list Proxmox libraries for interfacing with
     Rust
@@ -753,7 +1431,7 @@ pve-manager (7.2-15) bullseye; urgency=medium
     keypresses
 
   * ui: tags: implement dirty tracking for inline editing and highlight finish
-    inline editing button if there are uncomitted changes
+    inline editing button if there are uncommitted changes
 
   * ui: datacenter options: add basic editor for Cluster Resource Scheduling
     setting
@@ -1085,7 +1763,7 @@ pve-manager (7.1-13) bullseye; urgency=medium
     to a slower frequency to better convey that there may be an acute failing,
     not just a flapping error like one mail could suggest.
 
-  * replication: include more info in mail like failure-count, last succesful
+  * replication: include more info in mail like failure-count, last successful
     sync, next try and current target node.
 
   * ui: sdn: zone evpn: delete exitnodes-primary if empty
@@ -1225,7 +1903,7 @@ pve-manager (7.1-8) bullseye; urgency=medium
   * ui: upload/download image: trim whitespace from checksum value
 
   * ui: calendar event: add an once-daily example and clarify workday at 00:00
-    one slighlty
+    one slightly
 
   * ui: container: allow one to set the 'lazytime' mount option
 
@@ -1305,7 +1983,7 @@ pve-manager (7.1-1) bullseye; urgency=medium
 
   * api/services: add pvescheduler to the service list
 
-  * ui: ceph: add more compatibilty code for versions
+  * ui: ceph: add more compatibility code for versions
 
   * ui: backup: show retention settings in own column
 
@@ -1360,7 +2038,7 @@ pve-manager (7.0-15) bullseye; urgency=medium
 
   * ui: dc/options: display WebAuthn and add editor
 
-  * api: ceph-mds: get mds state when multple ceph filesystems exist
+  * api: ceph-mds: get mds state when multiple ceph filesystems exist
 
   * ceph fs: support creating multiple CephFS via UI/API
 
@@ -1441,7 +2119,7 @@ pve-manager (7.0-12) bullseye; urgency=medium
 
   * ui: backup job detail view: merge mail notification when/to fields
 
-  * ui: improve ACME edit/apply button visibilty
+  * ui: improve ACME edit/apply button visibility
 
   * fix #3620: ui: dc/storage: delete empty pbs fingerprint on edit
 
@@ -1479,7 +2157,7 @@ pve-manager (7.0-11) bullseye; urgency=medium
 
   * ui: node/ZFS: add zstd to possible compression methods
 
-  * vzdump: use storage plugins to determine backup feasability
+  * vzdump: use storage plugins to determine backup feasibility
 
   * ui: lxc/CreateWizard: add a 'nesting' checkbox and enable it by default
 
@@ -1508,7 +2186,7 @@ pve-manager (7.0-10) bullseye; urgency=medium
 
 pve-manager (7.0-9) bullseye; urgency=medium
 
-  * pve6to7: sync new checks and adaptions from stable-6 branch for consitency
+  * pve6to7: sync new checks and adaptions from stable-6 branch for consistency
 
   * fix #3490: do not filter out 'Generic System Peripheral' PCI(e) devices by
     default
@@ -1538,7 +2216,7 @@ pve-manager (7.0-8) bullseye; urgency=medium
   * pveceph: also install nvme-cli
 
   * ui: dc/guests: change layouting to a flexbox, fixing render issues in
-    Firefox on somes systems
+    Firefox on some systems
 
   * pve6to7: sync new checks from stable-6 branch
 
@@ -1633,7 +2311,7 @@ pve-manager (7.0-3) bullseye; urgency=medium
     snapshots got pruned
 
   * node config: limit description/comment length to 64 KiB and check in
-    pve6to7 for overly long exisitng notes.
+    pve6to7 for overly long existing notes.
 
   * ui: fix unlimited height of VM/CT Summary notes-view, noticeable on long text
 
@@ -1663,7 +2341,7 @@ pve-manager (7.0-1) bullseye; urgency=medium
 
   * re-build for Proxmox VE 7 based on Debian Bullseye
 
-  * d/control: order ifupdown2 as first, prefered, dependency
+  * d/control: order ifupdown2 as first, preferred, dependency
 
   * enable installation of ceph 16.2 pacific release
 
@@ -1690,7 +2368,7 @@ pve-manager (6.4-6) pve; urgency=medium
     the IPv6 network stack system-wide (which should be done by setting the
     `net.ipv6.conf.all.disable_ipv6` sysctl, not over the kernel command line)
 
-  * ui: storage status: use SI (base ten) units for usage for consitency with
+  * ui: storage status: use SI (base ten) units for usage for consistency with
     RRD chart
 
  -- Proxmox Support Team <support@proxmox.com>  Fri, 07 May 2021 18:17:25 +0200
@@ -1761,7 +2439,7 @@ pve-manager (6.4-1) pve; urgency=medium
   * fix #417: proxy: allow one to configure a address where the pveproxy and
     spiceproxy should listen and default to listening on both, IPv6 and IPv4.
     This changes the log format for IPv4 addresses, as ::ffff: will be prefixed.
-    Either adpat any matching software (for example, fail2ban) or disable this
+    Either adapt any matching software (for example, fail2ban) or disable this
     by setting the LISTEN_IP to 0.0.0.0, if this is not wanted.
 
   * ui: safe destroy guest: add checkbox for removal of unreferenced disks
@@ -1843,7 +2521,7 @@ pve-manager (6.3-5) pve; urgency=medium
 
 pve-manager (6.3-4) pve; urgency=medium
 
-  * pveceph: improve useability of 'status' command
+  * pveceph: improve usability of 'status' command
 
   * fix #3203: ui: VM hardware: use correct OS default model for network device
     type
@@ -2007,7 +2685,7 @@ pve-manager (6.2-13) pve; urgency=medium
 
   * partially fix #3056: namespace vzdump temporary directory with VMID
 
-  * ceph: allow to alter settings of an exisiting pool, only over API/CLI for
+  * ceph: allow to alter settings of an existing pool, only over API/CLI for
     now
 
   * ceph: add option to control placement-group autoscale mode on pool create
@@ -2148,7 +2826,7 @@ pve-manager (6.2-6) pve; urgency=medium
 
 pve-manager (6.2-5) pve; urgency=medium
 
-  * improve ACME interaces
+  * improve ACME interfaces
 
   * fix #2747: ui: API token create: always reset base submit URL
 
@@ -2357,7 +3035,7 @@ pve-manager (6.1-4) pve; urgency=medium
 
 pve-manager (6.1-3) pve; urgency=medium
 
-  * api: apt/versions: improve stabillity under edge cases
+  * api: apt/versions: improve stability under edge cases
 
   * improve pveversion for removed but not yet purged packages
 
@@ -2369,7 +3047,7 @@ pve-manager (6.1-2) pve; urgency=medium
 
   * ui: dc/options: add onlineHelp to u2f and ha edit window
 
-  * LXC: Disable resize button when volume is unusued
+  * LXC: Disable resize button when volume is unused
 
   * ui: dc/options: fix capabillities for u2f, bwlimits, ha settings
 
@@ -2548,7 +3226,7 @@ pve-manager (6.0-7) pve; urgency=medium
 
   * fix #2340: gui: ceph: handle 'null' versions for hosts
 
-  * fix #2341: ceph: osd create: allow db/wal on partioned disks
+  * fix #2341: ceph: osd create: allow db/wal on partitioned disks
 
   * ui: allow one to add the AES flag explicitly to VMs
 
@@ -2727,7 +3405,7 @@ pve-manager (6.0-0+3) pve; urgency=medium
   * VM migrate: do some initial checks before a migrate is triggered to notify
     users about problems earlier
 
-  * ceph: init: update inital config for nautilus
+  * ceph: init: update initial config for nautilus
 
   * ceph: improve monitor creation and adapt for Nautilus
 
@@ -2940,7 +3618,7 @@ pve-manager (5.3-10) unstable; urgency=medium
 
   * fix #2096: enable resume in context menu for guest triggered sleep
 
-  * default to unpriviledged CT in the GUI
+  * default to unprivileged CT in the GUI
 
   * fix #1769: restart mode for bulk lxc migration
 
@@ -3083,7 +3761,7 @@ pve-manager (5.2-11) unstable; urgency=medium
 
   * Update default CIPHERS to a more current list
 
-  * close #584: ui qemu: changed remove unused disk to asynchron call
+  * close #584: ui qemu: changed remove unused disk to asynchronous call
 
   * dc/user: render user fullnames htmlEncoded
 
@@ -3403,7 +4081,7 @@ pve-manager (5.1-46) stable; urgency=medium
 
   * fix #1635: correctly change maxIds in ControllerSelector in wizard
 
-  * enable/disable xtermjs depending on the existance of a serial port
+  * enable/disable xtermjs depending on the existence of a serial port
 
   * show serial ports on the gui
 
@@ -3835,7 +4513,7 @@ pve-manager (5.0-12) unstable; urgency=medium
 
   * translate params in bulk migrate window
 
-  * change to debians font-awesome package
+  * change to debian's font-awesome package
 
   * mark node shutdown/reboot buttons as dangerous
 
@@ -4077,7 +4755,7 @@ pve-manager (4.4-9) unstable; urgency=medium
 
   * use new PVE::Storage::check_volume_access()
 
-  * pvestatd.pm: corretly use new RPCEnvironment
+  * pvestatd.pm: correctly use new RPCEnvironment
 
   * pveproxy: do not expose /pve2/js/ (no longer required)
 
@@ -4145,7 +4823,7 @@ pve-manager (4.4-6) unstable; urgency=medium
 
   * remove vznet.conf
 
-  * Reload the Ceph OSDTree afer adding an OSD
+  * Reload the Ceph OSDTree after adding an OSD
 
   * fix #1230: add blocksize for ZFSPoolPlugin
 
@@ -4159,7 +4837,7 @@ pve-manager (4.4-6) unstable; urgency=medium
 
 pve-manager (4.4-5) unstable; urgency=medium
 
-  * add unpriviledged flag to container restore window
+  * add unprivileged flag to container restore window
 
  -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Dec 2016 11:29:31 +0100
 
@@ -4312,7 +4990,7 @@ pve-manager (4.3-11) unstable; urgency=medium
 
   * API2Client: allow to set ssl options
 
-  * fix #1196: make restriced/nofailback boolean in gui
+  * fix #1196: make restricted/nofailback boolean in gui
 
   * disable rules copy button if not 'in' or 'out' rule
 
@@ -4610,7 +5288,7 @@ pve-manager (4.2-17) unstable; urgency=medium
 
   * Add some extra debug information to the report.
 
-  * add ca-certificates as required depency
+  * add ca-certificates as required dependency
 
   * lxc/status: show disk usage on running containers
 
@@ -4668,7 +5346,7 @@ pve-manager (4.2-13) unstable; urgency=medium
 
 pve-manager (4.2-12) unstable; urgency=medium
 
-  * Rename the SCSI VirtIO controller to better differenciate from VirtIO blk
+  * Rename the SCSI VirtIO controller to better differentiate from VirtIO blk
 
   * fix #778: Case fix for VMware
 
@@ -4815,7 +5493,7 @@ pve-manager (4.1-33) unstable; urgency=medium
 
 pve-manager (4.1-32) unstable; urgency=medium
 
-  * GUI: enhace visibillity of dialog window border
+  * GUI: enhance visibility of dialog window border
 
   * fix #143: add disk/mem percent sort
 
@@ -5120,7 +5798,7 @@ pve-manager (4.0-63) unstable; urgency=medium
 
   * pvestatd: use 'priv' environment for service
 
-  * improve log messages at sytem shutdown
+  * improve log messages at system shutdown
 
   * pveproxy.service: add Wants=ssh.service
 
@@ -5142,11 +5820,11 @@ pve-manager (4.0-61) unstable; urgency=medium
 
   * ceph.conf : remove auth_supported
 
-  * Allow email adresses with a top level domain of up to 63 characters
+  * Allow email addresses with a top level domain of up to 63 characters
 
   * fix bug #575: fork at shutdown, so that partent starts new worker
 
-  * update build infrastucture to be able to develop with Ext6
+  * update build infrastructure to be able to develop with Ext6
 
  -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2015 10:05:01 +0100
 
@@ -5214,7 +5892,7 @@ pve-manager (4.0-51) unstable; urgency=medium
 
 pve-manager (4.0-50) unstable; urgency=medium
 
-  * fix bug #756: force macro setting to emtpy string when
+  * fix bug #756: force macro setting to empty string when
     user erases the content
 
  -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Oct 2015 17:41:02 +0200
@@ -5291,7 +5969,7 @@ pve-manager (4.0-39) unstable; urgency=medium
 
   * update sencha touch sources to 2.4.2
 
-  * Allow email adresses with a top level domain of up to 63 characters
+  * Allow email addresses with a top level domain of up to 63 characters
 
   * Deny stop mode backups from HA managed and enabled services
 
@@ -5698,7 +6376,7 @@ pve-manager (3.3-12) unstable; urgency=low
 
 pve-manager (3.3-11) unstable; urgency=low
   
-  * New 'disconnect' button on the network edit pannel.
+  * New 'disconnect' button on the network edit panel.
 
   * Fix backup failure at shutdown (stop backup on host shutdown)
   
@@ -5748,7 +6426,7 @@ pve-manager (3.3-5) unstable; urgency=low
 
 pve-manager (3.3-4) unstable; urgency=low
 
-  * pveproxy: limit ourselfes to tlsv1 
+  * pveproxy: limit ourselves to tlsv1
 
  -- Proxmox Support Team <support@proxmox.com>  Wed, 15 Oct 2014 15:49:17 +0200
 
@@ -6237,7 +6915,7 @@ pve-manager (3.1-14) unstable; urgency=low
 
 pve-manager (3.1-13) unstable; urgency=low
 
-  * dissable SSL compression (avoid TLS CRIME vulnerability)
+  * disable SSL compression (avoid TLS CRIME vulnerability)
 
  -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Sep 2013 07:17:17 +0200
 
@@ -6454,7 +7132,7 @@ pve-manager (3.0-23) unstable; urgency=low
   
   * fix bug #401: disable connection timeout during API call processing
 
-  * add suport for new qemu-server async configuration API
+  * add support for new qemu-server async configuration API
   
  -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Jun 2013 11:52:15 +0200
 
@@ -6800,7 +7478,7 @@ pve-manager (2.2-19) unstable; urgency=low
 
 pve-manager (2.2-18) unstable; urgency=low
 
-  * add workaroud to correctly show scrollbars
+  * add workaround to correctly show scrollbars
 
  -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Sep 2012 11:22:16 +0200
 
@@ -7273,7 +7951,7 @@ pve-manager (2.0-14) unstable; urgency=low
 
 pve-manager (2.0-13) unstable; urgency=low
 
-  * implemente openvz migration ('pvectl migrate')
+  * implement openvz migration ('pvectl migrate')
 
  -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Dec 2011 10:37:28 +0100
 
@@ -7311,7 +7989,7 @@ pve-manager (2.0-8) unstable; urgency=low
 
 pve-manager (2.0-7) unstable; urgency=low
 
-  * imlement openvz GUI 
+  * implement openvz GUI
 
  -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Oct 2011 13:56:03 +0200
 
@@ -7393,7 +8071,7 @@ pve-manager (1.5-3) unstable; urgency=low
 
 pve-manager (1.5-2) unstable; urgency=low
 
-  * add CPUs settings for OpenVZ (work now withe kernel 2.6.18)
+  * add CPUs settings for OpenVZ (work now with kernel 2.6.18)
 
  -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Jan 2010 09:42:08 +0100
 

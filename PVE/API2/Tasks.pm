@@ -327,6 +327,7 @@ __PACKAGE__->register_method({
 	user => 'all',
     },
     protected => 1,
+    download_allowed => 1,
     description => "Read task log.",
     proxyto => 'node',
     parameters => {
@@ -479,7 +480,10 @@ __PACKAGE__->register_method({
 		type => 'string',
 	    },
 	    starttime => {
-		type => 'number',
+		type => 'integer',
+	    },
+	    pstart => {
+		type => 'integer',
 	    },
 	    node => {
 		type => 'string',

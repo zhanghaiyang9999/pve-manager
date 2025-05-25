@@ -59,7 +59,7 @@ Ext.define('PVE.lxc.Config', {
 	    text: gettext('Shutdown'),
 	    disabled: !caps.vms['VM.PowerMgmt'] || !running,
 	    hidden: template,
-	    confirmMsg: Proxmox.Utils.format_task_description('vzshutdown', vmid),
+	    confirmMsg: PVE.Utils.formatGuestTaskConfirmation('vzshutdown', vmid, vm.name),
 	    handler: function() {
 		vm_command('shutdown');
 	    },
@@ -67,7 +67,7 @@ Ext.define('PVE.lxc.Config', {
 		items: [{
 		    text: gettext('Reboot'),
 		    disabled: !caps.vms['VM.PowerMgmt'],
-		    confirmMsg: Proxmox.Utils.format_task_description('vzreboot', vmid),
+		    confirmMsg: PVE.Utils.formatGuestTaskConfirmation('vzreboot', vmid, vm.name),
 		    tooltip: Ext.String.format(gettext('Reboot {0}'), 'CT'),
 		    handler: function() {
 			vm_command("reboot");
@@ -77,11 +77,13 @@ Ext.define('PVE.lxc.Config', {
 		{
 		    text: gettext('Stop'),
 		    disabled: !caps.vms['VM.PowerMgmt'],
-		    confirmMsg: Proxmox.Utils.format_task_description('vzstop', vmid),
 		    tooltip: Ext.String.format(gettext('Stop {0} immediately'), 'CT'),
-		    dangerous: true,
 		    handler: function() {
-			vm_command("stop");
+			Ext.create('PVE.GuestStop', {
+			    nodename: nodename,
+			    vm: vm,
+			    autoShow: true,
+			});
 		    },
 		    iconCls: 'fa fa-stop',
 		}],
@@ -98,6 +100,7 @@ Ext.define('PVE.lxc.Config', {
 		    vmtype: 'lxc',
 		    nodename: nodename,
 		    vmid: vmid,
+		    vmname: vm.name,
 		});
 		win.show();
 	    },
@@ -113,7 +116,13 @@ Ext.define('PVE.lxc.Config', {
 		    iconCls: 'fa fa-fw fa-clone',
 		    hidden: !caps.vms['VM.Clone'],
 		    handler: function() {
-			PVE.window.Clone.wrap(nodename, vmid, template, 'lxc');
+			PVE.window.Clone.wrap(
+			    nodename,
+			    vmid,
+			    vm.name,
+			    template,
+			    'lxc',
+			);
 		    },
 		},
 		{
@@ -122,7 +131,7 @@ Ext.define('PVE.lxc.Config', {
 		    xtype: 'pveMenuItem',
 		    iconCls: 'fa fa-fw fa-file-o',
 		    hidden: !caps.vms['VM.Allocate'],
-		    confirmMsg: Proxmox.Utils.format_task_description('vztemplate', vmid),
+		    confirmMsg: PVE.Utils.formatGuestTaskConfirmation('vztemplate', vmid, vm.name),
 		    handler: function() {
 			Proxmox.Utils.API2Request({
 			    url: base_url + '/template',
@@ -154,7 +163,11 @@ Ext.define('PVE.lxc.Config', {
 		    handler: function() {
 			Ext.create('PVE.window.SafeDestroyGuest', {
 			    url: base_url,
-			    item: { type: 'CT', id: vmid },
+			    item: {
+				type: 'CT',
+				id: vmid,
+				formattedIdentifier: PVE.Utils.getFormattedGuestIdentifier(vmid, vm.name),
+			    },
 			    taskName: 'vzdestroy',
 			}).show();
 		    },
@@ -314,6 +327,7 @@ Ext.define('PVE.lxc.Config', {
 		    base_url: base_url + '/firewall/rules',
 		    list_refs_url: base_url + '/firewall/refs',
 		    itemId: 'firewall',
+		    firewall_type: 'vm',
 		},
 		{
 		    xtype: 'pveFirewallOptions',
@@ -355,6 +369,8 @@ Ext.define('PVE.lxc.Config', {
 		    itemId: 'firewall-fwlog',
 		    xtype: 'proxmoxLogView',
 		    url: '/api2/extjs' + base_url + '/firewall/log',
+		    log_select_timespan: true,
+		    submitFormat: 'U',
 		},
 	    );
 	}

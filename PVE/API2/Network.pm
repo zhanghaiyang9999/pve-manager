@@ -38,7 +38,7 @@ my $bond_mode_enum = [
     ];
 
 my $network_type_enum = ['bridge', 'bond', 'eth', 'alias', 'vlan',
-			 'OVSBridge', 'OVSBond', 'OVSPort', 'OVSIntPort'];
+			 'OVSBridge', 'OVSBond', 'OVSPort', 'OVSIntPort', 'vnet'];
 
 my $confdesc = {
     type => {
@@ -65,6 +65,11 @@ my $confdesc = {
 	description => "Enable bridge vlan support.",
 	type => 'boolean',
 	optional => 1,
+    },
+    bridge_vids => {
+	description => "Specify the allowed VLANs. For example: '2 4 100-200'. Only used if the bridge is VLAN aware.",
+	optional => 1,
+	type => 'string', format => 'pve-vlan-id-or-range-list',
     },
     bridge_ports => {
 	description => "Specify the interfaces you want to add to your bridge.",
@@ -218,7 +223,125 @@ __PACKAGE__->register_method({
 	type => "array",
 	items => {
 	    type => "object",
-	    properties => {},
+	    properties => json_config_properties({
+		iface => get_standard_option('pve-iface'),
+		active => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Set to true if the interface is active.",
+		},
+		'bridge-access' => {
+		    type => 'integer',
+		    optional => 1,
+		    description => "The bridge port access VLAN.",
+		},
+		'bridge-learning' => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Bridge port learning flag.",
+		},
+		'bridge-arp-nd-suppress' => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Bridge port ARP/ND suppress flag.",
+		},
+		'bridge-unicast-flood' => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Bridge port unicast flood flag.",
+		},
+		'bridge-multicast-flood' => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Bridge port multicast flood flag.",
+		},
+		exists => {
+		    type => 'boolean',
+		    optional => 1,
+		    description => "Set to true if the interface physically exists.",
+		},
+		families => {
+		    type => "array",
+		    description => "The network families.",
+		    items => {
+			type => "string",
+			description => "A network family.",
+			enum => ["inet", "inet6"],
+		    },
+		    optional => 1,
+		},
+		'link-type' => {
+		    type => 'string',
+		    optional => 1,
+		    description => "The link type.",
+		},
+		method => {
+		    type => "string",
+		    description => "The network configuration method for IPv4.",
+		    enum => ["loopback", "dhcp", "manual", "static", "auto"],
+		    optional => 1,
+		},
+		method6 => {
+		    type => "string",
+		    description => "The network configuration method for IPv6.",
+		    enum => ["loopback", "dhcp", "manual", "static", "auto"],
+		    optional => 1,
+		},
+		options => {
+		    type => 'array',
+		    optional => 1,
+		    description => "A list of additional interface options for IPv4.",
+		    items => {
+			type => "string",
+			description => "An interface property.",
+		    },
+		},
+		options6 => {
+		    type => 'array',
+		    optional => 1,
+		    description => "A list of additional interface options for IPv6.",
+		    items => {
+			type => "string",
+			description => "An interface property.",
+		    },
+		},
+		priority => {
+		    type => 'integer',
+		    description => "The order of the interface.",
+		    optional => 1,
+		},
+		'uplink-id' => {
+		    type => 'string',
+		    optional => 1,
+		    description => "The uplink ID.",
+		},
+		'vlan-protocol' => {
+		    type => 'string',
+		    optional => 1,
+		    enum => [qw(802.1ad 802.1q)],
+		    description => "The VLAN protocol.",
+		},
+		'vxlan-id' => {
+		    type => 'integer',
+		    optional => 1,
+		    description => "The VXLAN ID.",
+		},
+		'vxlan-svcnodeip' => {
+		    type => 'string',
+		    optional => 1,
+		    description => "The VXLAN SVC node IP.",
+		},
+		'vxlan-physdev' => {
+		    type => 'string',
+		    optional => 1,
+		    description => "The physical device for the VXLAN tunnel.",
+		},
+		'vxlan-local-tunnelip' => {
+		    type => 'string',
+		    optional => 1,
+		    description => "The VXLAN local tunnel IP.",
+		},
+	    }),
 	},
 	links => [ { rel => 'child', href => "{iface}" } ],
     },
@@ -469,6 +592,14 @@ __PACKAGE__->register_method({
 		    if ! grep { $_ eq $iface } @ports;
 	    }
 
+	    if ($param->{bridge_vids} && scalar(PVE::Tools::split_list($param->{bridge_vids}) == 0)) {
+		raise_param_exc({ bridge_vids => "VLAN list items are empty" });
+	    }
+	    # make sure the list is space separated! other separators will cause problems in the
+	    # network configuration
+	    $param->{bridge_vids} = join(" ", PVE::Tools::split_list($param->{bridge_vids}))
+		if $param->{bridge_vids};
+
 	    $ifaces->{$iface} = $param;
 
 	    PVE::INotify::write_file('interfaces', $config);
@@ -558,7 +689,15 @@ __PACKAGE__->register_method({
 	    foreach my $k (keys %$param) {
 		$ifaces->{$iface}->{$k} = $param->{$k};
 	    }
-	    
+
+	    if ($param->{bridge_vids} && scalar(PVE::Tools::split_list($param->{bridge_vids}) == 0)) {
+		raise_param_exc({ bridge_vids => "VLAN list items are empty" });
+	    }
+	    # make sure the list is space separated! other separators will cause problems in the
+	    # network configuration
+	    $param->{bridge_vids} = join(" ", PVE::Tools::split_list($param->{bridge_vids}))
+		if $param->{bridge_vids};
+
 	    PVE::INotify::write_file('interfaces', $config);
 	};
 

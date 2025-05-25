@@ -3,6 +3,8 @@ Ext.define('PVE.storage.ContentView', {
 
     alias: 'widget.pveStorageContentView',
 
+    itemdblclick: Ext.emptyFn,
+
     viewConfig: {
 	trackOver: false,
 	loadMask: false,
@@ -41,10 +43,10 @@ Ext.define('PVE.storage.ContentView', {
 		    content: content,
 		},
 	    },
-	    sorters: {
-		property: 'volid',
-		direction: 'ASC',
-	    },
+	    sorters: [
+		(a, b) => a.data.text.toString().localeCompare(
+		    b.data.text.toString(), undefined, { numeric: true }),
+	    ],
 	});
 
 	if (!me.sm) {
@@ -56,11 +58,9 @@ Ext.define('PVE.storage.ContentView', {
 
 	Proxmox.Utils.monStoreErrors(me, store);
 
-	if (!me.tbar) {
-	    me.tbar = [];
-	}
+	let tbar = me.tbar ? [...me.tbar] : [];
 	if (me.useUploadButton) {
-	    me.tbar.unshift(
+	    tbar.unshift(
 		{
 		    xtype: 'button',
 		    text: gettext('Upload'),
@@ -93,7 +93,7 @@ Ext.define('PVE.storage.ContentView', {
 	    );
 	}
 	if (!me.useCustomRemoveButton) {
-	    me.tbar.push({
+	    tbar.push({
 		xtype: 'proxmoxStdRemoveButton',
 		selModel: sm,
 		enableFn: rec => !rec?.data?.protected,
@@ -102,7 +102,7 @@ Ext.define('PVE.storage.ContentView', {
 		baseurl: baseurl + '/',
 	    });
 	}
-	me.tbar.push(
+	tbar.push(
 	    '->',
 	    gettext('Search') + ':',
 	    ' ',
@@ -153,6 +153,8 @@ Ext.define('PVE.storage.ContentView', {
 		flex: 2,
 		sortable: true,
 		renderer: PVE.Utils.render_storage_content,
+		sorter: (a, b) => a.data.text.toString().localeCompare(
+		    b.data.text.toString(), undefined, { numeric: true }),
 		dataIndex: 'text',
 	    },
 	    'notes': {
@@ -201,12 +203,13 @@ Ext.define('PVE.storage.ContentView', {
 	const columns = Object.values(availableColumns);
 
 	Ext.apply(me, {
-	    store: store,
+	    store,
 	    selModel: sm,
-	    tbar: me.tbar,
-	    columns: columns,
+	    tbar,
+	    columns,
 	    listeners: {
 		activate: reload,
+		itemdblclick: (view, record) => me.itemdblclick(view, record),
 	    },
 	});
 

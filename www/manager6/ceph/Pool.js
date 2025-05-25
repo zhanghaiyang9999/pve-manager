@@ -16,8 +16,10 @@ Ext.define('PVE.CephPoolInputPanel', {
 
 	init: function(view) {
 	    let vm = this.getViewModel();
-	    vm.set('size', Number(view.defaultSize));
-	    vm.set('minSize', Number(view.defaultMinSize));
+	    if (view.isCreate) {
+		vm.set('size', Number(view.defaultSize));
+		vm.set('minSize', Number(view.defaultMinSize));
+	    }
 	},
 	sizeChange: function(field, val) {
 	    let vm = this.getViewModel();
@@ -88,7 +90,7 @@ Ext.define('PVE.CephPoolInputPanel', {
     column2: [
 	{
 	    xtype: 'proxmoxKVComboBox',
-	    fieldLabel: 'PG Autoscale Mode',
+	    fieldLabel: gettext('PG Autoscaler Mode'),
 	    name: 'pg_autoscale_mode',
 	    comboItems: [
 		['warn', 'warn'],
@@ -299,6 +301,7 @@ Ext.define('PVE.node.Ceph.PoolList', {
 	    flex: 2,
 	    sortable: true,
 	    dataIndex: 'pool_name',
+	    renderer: Ext.htmlEncode,
 	},
 	{
 	    text: gettext('Type'),
@@ -306,6 +309,14 @@ Ext.define('PVE.node.Ceph.PoolList', {
 	    flex: 1,
 	    dataIndex: 'type',
 	    hidden: true,
+	},
+	{
+	    text: gettext('Application'),
+	    minWidth: 100,
+	    flex: 1,
+	    dataIndex: 'application_metadata',
+	    hidden: true,
+	    renderer: (v, _meta, _rec) => Ext.htmlEncode(Object.keys(v).toString()),
 	},
 	{
 	    text: gettext('Size') + '/min',
@@ -370,7 +381,7 @@ Ext.define('PVE.node.Ceph.PoolList', {
 	    },
 	},
 	{
-	    text: gettext('Autoscale Mode'),
+	    text: gettext('Autoscaler Mode'),
 	    flex: 1,
 	    minWidth: 100,
 	    align: 'right',
@@ -381,7 +392,7 @@ Ext.define('PVE.node.Ceph.PoolList', {
 	    flex: 1,
 	    align: 'right',
 	    minWidth: 150,
-	    renderer: (v, meta, rec) => `${v} (${rec.data.crush_rule})`,
+	    renderer: (v, meta, rec) => Ext.htmlEncode(`${v} (${rec.data.crush_rule})`),
 	    dataIndex: 'crush_rule_name',
 	},
 	{
@@ -532,21 +543,22 @@ Ext.define('PVE.node.Ceph.PoolList', {
 }, function() {
     Ext.define('ceph-pool-list', {
 	extend: 'Ext.data.Model',
-	fields: ['pool_name',
-		  { name: 'pool', type: 'integer' },
-		  { name: 'size', type: 'integer' },
-		  { name: 'min_size', type: 'integer' },
-		  { name: 'pg_num', type: 'integer' },
-		  { name: 'pg_num_min', type: 'integer' },
-		  { name: 'bytes_used', type: 'integer' },
-		  { name: 'percent_used', type: 'number' },
-		  { name: 'crush_rule', type: 'integer' },
-		  { name: 'crush_rule_name', type: 'string' },
-		  { name: 'pg_autoscale_mode', type: 'string' },
-		  { name: 'pg_num_final', type: 'integer' },
-		  { name: 'target_size_ratio', type: 'number' },
-		  { name: 'target_size', type: 'integer' },
-		],
+	fields: [
+	    'pool_name',
+	    { name: 'pool', type: 'integer' },
+	    { name: 'size', type: 'integer' },
+	    { name: 'min_size', type: 'integer' },
+	    { name: 'pg_num', type: 'integer' },
+	    { name: 'pg_num_min', type: 'integer' },
+	    { name: 'bytes_used', type: 'integer' },
+	    { name: 'percent_used', type: 'number' },
+	    { name: 'crush_rule', type: 'integer' },
+	    { name: 'crush_rule_name', type: 'string' },
+	    { name: 'pg_autoscale_mode', type: 'string' },
+	    { name: 'pg_num_final', type: 'integer' },
+	    { name: 'target_size_ratio', type: 'number' },
+	    { name: 'target_size', type: 'integer' },
+	],
 	idProperty: 'pool_name',
     });
 });

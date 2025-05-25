@@ -221,6 +221,14 @@ Ext.define('PVE.dc.Config', {
 		    hidden: true,
 		    iconCls: 'fa fa-map-signs',
 		    itemId: 'sdnmappings',
+		},
+		{
+		    xtype: 'pveSDNFirewall',
+		    groups: ['sdn'],
+		    title: gettext('VNet Firewall'),
+		    hidden: true,
+		    iconCls: 'fa fa-shield',
+		    itemId: 'sdnfirewall',
 		});
 	    }
 
@@ -241,6 +249,7 @@ Ext.define('PVE.dc.Config', {
 		list_refs_url: '/cluster/firewall/refs',
 		iconCls: 'fa fa-shield',
 		itemId: 'firewall',
+		firewall_type: 'dc',
 	    },
 	    {
 		xtype: 'pveFirewallOptions',
@@ -321,6 +330,12 @@ Ext.define('PVE.dc.Config', {
 			    flex: 1,
 			},
 		    ],
+		},
+		{
+		    xtype: 'pveDcDirMapView',
+		    itemId: 'directories',
+		    title: gettext('Directory Mappings'),
+		    iconCls: 'fa fa-folder',
 		},
 	    );
 	}

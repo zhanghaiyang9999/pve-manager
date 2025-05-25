@@ -10,7 +10,7 @@ use PVE::Tools qw(extract_param);
 use PVE::Cluster qw(cfs_lock_file cfs_read_file cfs_write_file);
 use PVE::RESTHandler;
 use PVE::RPCEnvironment;
-use PVE::JSONSchema;
+use PVE::JSONSchema qw(get_standard_option);
 use PVE::Storage;
 use PVE::Exception qw(raise_param_exc);
 use PVE::VZDump;
@@ -34,23 +34,23 @@ sub verify_day_of_week {
     die "invalid day '$value'\n";
 }
 
-my $vzdump_job_id_prop = {
-    type => 'string',
-    description => "The job ID.",
-    maxLength => 50
-};
-
 # NOTE: also used by the vzdump API call.
 sub assert_param_permission_common {
-    my ($rpcenv, $user, $param) = @_;
+    my ($rpcenv, $user, $param, $is_delete) = @_;
     return if $user eq 'root@pam'; # always OK
 
-    for my $key (qw(tmpdir dumpdir script)) {
+    for my $key (qw(tmpdir dumpdir script job-id)) {
 	raise_param_exc({ $key => "Only root may set this option."}) if exists $param->{$key};
     }
 
     if (grep { defined($param->{$_}) } qw(bwlimit ionice performance)) {
 	$rpcenv->check($user, "/", [ 'Sys.Modify' ]);
+    }
+
+    if ($param->{fleecing} && !$is_delete) {
+	my $fleecing = PVE::VZDump::parse_fleecing($param) // {};
+	$rpcenv->check($user, "/storage/$fleecing->{storage}", [ 'Datastore.AllocateSpace' ])
+	    if $fleecing->{storage};
     }
 }
 
@@ -70,7 +70,7 @@ my sub assert_param_permission_update {
     return if $user eq 'root@pam'; # always OK
 
     assert_param_permission_common($rpcenv, $user, $update);
-    assert_param_permission_common($rpcenv, $user, $delete);
+    assert_param_permission_common($rpcenv, $user, $delete, 1);
 
     if ($update->{storage}) {
 	$rpcenv->check($user, "/storage/$update->{storage}", [ 'Datastore.Allocate' ])
@@ -136,7 +136,7 @@ __PACKAGE__->register_method({
 	items => {
 	    type => "object",
 	    properties => {
-		id => $vzdump_job_id_prop
+		id => get_standard_option('pve-backup-jobid'),
 	    },
 	},
 	links => [ { rel => 'child', href => "{id}" } ],
@@ -292,7 +292,7 @@ __PACKAGE__->register_method({
     parameters => {
     	additionalProperties => 0,
 	properties => {
-	    id => $vzdump_job_id_prop
+	    id => get_standard_option('pve-backup-jobid'),
 	},
     },
     returns => {
@@ -340,7 +340,7 @@ __PACKAGE__->register_method({
     parameters => {
     	additionalProperties => 0,
 	properties => {
-	    id => $vzdump_job_id_prop
+	    id => get_standard_option('pve-backup-jobid'),
 	},
     },
     returns => { type => 'null' },
@@ -406,7 +406,7 @@ __PACKAGE__->register_method({
     parameters => {
     	additionalProperties => 0,
 	properties => PVE::VZDump::Common::json_config_properties({
-	    id => $vzdump_job_id_prop,
+	    id => get_standard_option('pve-backup-jobid'),
 	    schedule => {
 		description => "Backup schedule. The format is a subset of `systemd` calendar events.",
 		type => 'string', format => 'pve-calendar-event',
@@ -564,7 +564,7 @@ __PACKAGE__->register_method({
     parameters => {
 	additionalProperties => 0,
 	properties => {
-	    id => $vzdump_job_id_prop
+	    id => get_standard_option('pve-backup-jobid'),
 	},
     },
     returns => {

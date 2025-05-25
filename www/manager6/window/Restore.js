@@ -59,20 +59,21 @@ Ext.define('PVE.window.Restore', {
 		delete params.name;
 	    }
 
-	    let confirmMsg;
+	    let taskDescription;
 	    if (view.vmtype === 'lxc') {
 		params.ostemplate = view.volid;
 		params.restore = 1;
 		if (values.unprivileged !== 'keep') {
 		    params.unprivileged = values.unprivileged;
 		}
-		confirmMsg = Proxmox.Utils.format_task_description('vzrestore', params.vmid);
+		taskDescription = Proxmox.Utils.format_task_description('vzrestore', params.vmid);
 	    } else if (view.vmtype === 'qemu') {
 		params.archive = view.volid;
-		confirmMsg = Proxmox.Utils.format_task_description('qmrestore', params.vmid);
+		taskDescription = Proxmox.Utils.format_task_description('qmrestore', params.vmid);
 	    } else {
 		throw 'unknown VM type';
 	    }
+	    let confirmMsg = Ext.htmlEncode(taskDescription);
 
 	    let executeRestore = () => {
 		Proxmox.Utils.API2Request({
@@ -132,7 +133,7 @@ Ext.define('PVE.window.Restore', {
 
 			if (key === '#qmdump#map') {
 			    let match = value.match(/^(\S+):(\S+):(\S*):(\S*):$/) ?? [];
-			    // if a /dev/XYZ disk was backed up, ther is no storage hint
+			    // if a /dev/XYZ disk was backed up, there is no storage hint
 			    allStoragesAvailable &&= !!match[3] && !!PVE.data.ResourceStore.getById(
 				`storage/${view.nodename}/${match[3]}`);
 			} else if (key === 'name' || key === 'hostname') {
@@ -356,7 +357,8 @@ Ext.define('PVE.window.Restore', {
 
 	let title = gettext('Restore') + ": " + (me.vmtype === 'lxc' ? 'CT' : 'VM');
 	if (me.vmid) {
-	    title = `${gettext('Overwrite')} ${title} ${me.vmid}`;
+	    let formattedGuestIdentifier = PVE.Utils.getFormattedGuestIdentifier(me.vmid, me.vmname);
+	    title = `${gettext('Overwrite')} ${title} ${formattedGuestIdentifier}`;
 	}
 
 	Ext.apply(me, {

@@ -220,11 +220,14 @@ Ext.define('PVE.panel.PBSEncryptionKeyTab', {
 		// old key without FP
 		values['crypt-key-fp'] = icon + gettext('Active');
 	    }
+	    values.cryptMode = 'keep';
+	    values['crypt-allow-edit'] = false;
 	} else {
 	    values['crypt-key-fp'] = gettext('None');
 	    let cryptModeNone = me.down('radiofield[inputValue=none]');
 	    cryptModeNone.setBoxLabel(gettext('Do not encrypt backups'));
-	    cryptModeNone.setValue(true);
+	    values.cryptMode = 'none';
+	    values['crypt-allow-edit'] = true;
 	}
 	vm.set('keepCryptVisible', !!cryptKeyInfo);
 	vm.set('allowEdit', !cryptKeyInfo);
@@ -272,7 +275,6 @@ Ext.define('PVE.panel.PBSEncryptionKeyTab', {
 	    padding: '0 0 0 25',
 	    cbind: {
 		hidden: '{isCreate}',
-		checked: '{!isCreate}',
 	    },
 	    bind: {
 		hidden: '{!keepCryptVisible}',
@@ -565,15 +567,10 @@ Ext.define('PVE.storage.PBSInputPanel', {
 
 	me.columnB = [
 	    {
-		xtype: 'proxmoxtextfield',
+		xtype: 'pmxFingerprintField',
 		name: 'fingerprint',
 		value: me.isCreate ? null : undefined,
-		fieldLabel: gettext('Fingerprint'),
-		emptyText: gettext('Server certificate SHA-256 fingerprint, required for self-signed certificates'),
-		regex: /[A-Fa-f0-9]{2}(:[A-Fa-f0-9]{2}){31}/,
-		regexText: gettext('Example') + ': AB:CD:EF:...',
 		deleteEmpty: !me.isCreate,
-		allowBlank: true,
 	    },
 	];
 
