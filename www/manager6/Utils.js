@@ -1977,7 +1977,7 @@ Ext.define('PVE.Utils', {
 	    languageCookie = 'ko';
 	    Ext.util.Cookies.set('PVELangCookie', languageCookie, dt);
 	}
-	return languageCookie || Proxmox.defaultLang || 'en';
+	return languageCookie || 'zh_CN' || Proxmox.defaultLang ;
     },
 
     getFormattedGuestIdentifier: function(vmid, guestName) {

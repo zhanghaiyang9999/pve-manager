@@ -257,7 +257,7 @@ Ext.define('PVE.dc.Config', {
 		groups: ['firewall'],
 		iconCls: 'fa fa-gear',
 		base_url: '/cluster/firewall/options',
-		onlineHelp: 'pve_firewall_cluster_wide_setup',
+		//onlineHelp: 'pve_firewall_cluster_wide_setup',
 		fwtype: 'dc',
 		itemId: 'firewall-options',
 	    },
@@ -290,7 +290,7 @@ Ext.define('PVE.dc.Config', {
 		title: gettext('Metric Server'),
 		iconCls: 'fa fa-bar-chart',
 		itemId: 'metricservers',
-		onlineHelp: 'external_metric_server',
+		//onlineHelp: 'external_metric_server',
 	    });
 	}
 
@@ -300,7 +300,7 @@ Ext.define('PVE.dc.Config', {
 	    me.items.push(
 		{
 		    xtype: 'container',
-		    onlineHelp: 'resource_mapping',
+		    //onlineHelp: 'resource_mapping',
 		    title: gettext('Resource Mappings'),
 		    itemId: 'resources',
 		    iconCls: 'fa fa-folder-o',

@@ -226,7 +226,7 @@ sub get_index {
 	$consent_text = $dc_conf->{'consent-text'};
 
 	if (!$lang) {
-	    $lang = $dc_conf->{language} // 'en';
+	    $lang = 'zh_CN';
 	}
     };
     warn "$@\n" if $@;

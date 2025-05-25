@@ -29,12 +29,6 @@ configure this server - connect to:
   Or
   https://${host}:8006
 
-Control Center:
-  https://${ip_addr}:8443
-  Or
-  https://${host}:8443
-
-
 $xline
 
 __EOBANNER

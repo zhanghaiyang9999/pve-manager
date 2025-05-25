@@ -9,7 +9,7 @@
 Ext.define('PVE.Workspace', {
     extend: 'Ext.container.Viewport',
 
-    title: 'Proxmox Virtual Environment',
+    title: 'Virtual Environment',
 
     loginData: null, // Data from last login call
 
@@ -207,8 +207,8 @@ Ext.define('PVE.StdWorkspace', {
 	let ui = me.query('#versioninfo')[0];
 
 	if (PVE.VersionInfo) {
-	    let version = PVE.VersionInfo.version;
-	    ui.update('Virtual Environment ' + version);
+	    //let version = PVE.VersionInfo.version;
+	    ui.update('Virtual Environment');
 	} else {
 	    ui.update('Virtual Environment');
 	}
@@ -343,6 +343,7 @@ Ext.define('PVE.StdWorkspace', {
 			{
 			    flex: 1,
 			},
+			/* remove the document button for now
 			{
 			    xtype: 'proxmoxHelpButton',
 			    hidden: false,
@@ -353,6 +354,7 @@ Ext.define('PVE.StdWorkspace', {
 			    text: gettext('Documentation'),
 			    margin: '0 5 0 0',
 			},
+			*/
 			createVM,
 			createCT,
 			{
